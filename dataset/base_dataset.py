@@ -165,22 +165,84 @@ class QueryVideoDataset(Dataset):
             width, height = anno_width, anno_height
         # load bounding box
         bbox = get_bbox_from_data(sample["visual_crop"])     # BoxMode.XYXY_ABS, for crop only
+        if self.query_params['query_square']:
+            bbox = dataset_utils.bbox_cv2Totorch(torch.tensor(bbox))
+            bbox = dataset_utils.create_square_bbox(bbox, height, width)
+            bbox = dataset_utils.bbox_torchTocv2(bbox).tolist()
         # crop image to get query
         query = query.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
-        # resize query
-        query_size = self.query_params['query_size']
-        query = query.resize((query_size, query_size))
-        query = torch.from_numpy(np.asarray(query) / 255.0).permute(2,0,1)  # RGB, [C,H,W]
+        # pad query
+        if self.query_params['query_padding']:
+            transform = transforms.Compose([transforms.ToTensor()])
+            query = transform(query)    # [c,h,w]
+            _, h, w = query.shape
+            max_size, min_size = max(h, w), min(h, w)
+            pad_height = True if h < w else False
+            pad_size = (max_size - min_size) // 2
+            if pad_height:
+                pad_input = [0, pad_size] * 2                   # for the left, top, right and bottom borders respectively
+            else:
+                pad_input = [pad_size, 0] * 2
+            transform_pad = transforms.Pad(pad_input)
+            query = transform_pad(query)        # square image
+            # resize query
+            query_size = self.query_params['query_size']
+            query = F.interpolate(query.unsqueeze(0), size=(query_size, query_size), mode='bilinear').squeeze(0)
+        else:
+            query_size = self.query_params['query_size']
+            query = query.resize((query_size, query_size))
+            query = torch.from_numpy(np.asarray(query) / 255.0).permute(2,0,1)  # RGB, [C,H,W]
         return query
     
 
-    def _process_clip(self, clip, clip_bbox):
-        # clip in [T,C,H,W]
-        # bbox in [T,4] with torch coordinate with value range [0,1] normalized
+    def _get_query_train(self, clip, clip_bbox, clip_with_bbox, query_canonical):
+        '''
+        clip: [T,3,H,W], value range [0,1]
+        clip_bbox: [T,4], in torch axis, value range [0,1]
+        clip_with_bbox: [T]
+        '''
+        h,w = clip.shape[-2:]
+        #try:
+        fg_idxs = torch.where(clip_with_bbox)[0].numpy().tolist()
+        idx = random.choice(fg_idxs)
+        
+        frame = (clip[idx] * 255).permute(1,2,0).numpy().astype(np.uint8)
+        frame = Image.fromarray(frame)
+        bbox = dataset_utils.recover_bbox(clip_bbox[idx], h, w)
+        bbox = dataset_utils.bbox_torchTocv2(bbox).tolist()
+        query = frame.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+
+        query_size = self.query_params['query_size']
+        query = query.resize((query_size, query_size))
+        query = torch.from_numpy(np.asarray(query) / 255.0).permute(2,0,1)
+        # except:
+        #     query = query_canonical
+        return query
+    
+
+    def _process_clip(self, clip, clip_bbox, clip_with_bbox):
+        '''
+        clip: in [T,C,H,W]
+        bbox: in [T,4] with torch coordinate with value range [0,1] normalized
+        clip_with_bbox: in [T]
+        '''
         target_size = self.clip_params['fine_size']
 
         t, _, h, w = clip.shape
         clip_bbox = dataset_utils.recover_bbox(clip_bbox, h, w)
+
+        try:
+            fg_idxs = torch.where(clip_with_bbox)[0].numpy().tolist()
+            idx = random.choice(fg_idxs)
+            frame = (clip[idx] * 255).permute(1,2,0).numpy().astype(np.uint8)
+            frame = Image.fromarray(frame)
+            bbox = dataset_utils.bbox_torchTocv2(clip_bbox[idx]).tolist()
+            query = frame.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+            query_size = self.query_params['query_size']
+            query = query.resize((query_size, query_size))
+            query = torch.from_numpy(np.asarray(query) / 255.0).permute(2,0,1)
+        except:
+            query = None
 
         max_size, min_size = max(h, w), min(h, w)
         pad_height = True if h < w else False
@@ -198,7 +260,7 @@ class QueryVideoDataset(Dataset):
         h_pad, w_pad = clip.shape[-2:]
         clip = F.interpolate(clip, size=(target_size, target_size), mode='bilinear').squeeze(0)
         clip_bbox = clip_bbox / float(h_pad)                # in range [0,1]
-        return clip, clip_bbox
+        return clip, clip_bbox, query, h, w
 
 
     def __len__(self):
@@ -237,10 +299,12 @@ class QueryVideoDataset(Dataset):
         clip_with_bbox, clip_bbox = self._get_clip_bbox(sample, clip_idxs)
 
         # clip with square shape, bbox processed accordingly
-        clip, clip_bbox = self._process_clip(clip, clip_bbox)
+        clip, clip_bbox, query = self._process_clip(clip, clip_bbox, clip_with_bbox)
 
         # load query image
-        query = self._get_query(sample, query_path)
+        query_canonical = self._get_query(sample, query_path)
+        #if self.split != 'train' or (not torch.is_tensor(query)):
+        query = query_canonical.clone()
 
         results = {
             'clip': clip.float(),                           # [T,3,H,W]

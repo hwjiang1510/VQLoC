@@ -1,6 +1,6 @@
 import os
 from typing import Any, Callable
-
+import datetime
 import torch.distributed as dist
 
 
@@ -33,7 +33,7 @@ def dist_init(rank, backend="nccl"):
         key: os.environ[key] for key in ("MASTER_ADDR", "MASTER_PORT", "RANK", "WORLD_SIZE")
     }
     print(f"[{os.getpid()}] Initializing process group with: {env_dict}")
-    dist.init_process_group(backend="nccl", init_method="env://")
+    dist.init_process_group(backend="nccl", init_method="env://", timeout=datetime.timedelta(seconds=5400))
     assert rank == dist.get_rank()
     print(
         f"[{os.getpid()}]: world_size = {dist.get_world_size()}, "

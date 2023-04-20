@@ -5,6 +5,7 @@ import matplotlib.patches as patches
 import imageio
 import os
 from dataset import dataset_utils
+import torch
 import torch.nn.functional as F
 
 
@@ -34,8 +35,8 @@ def vis_pred_clip(sample, pred, iter_num, output_dir, subfolder='train'):
             # draw clips with bbox
             img = cur_clip[j].clamp(min=0.0, max=1.0)                               
             img = img.permute(1,2,0).numpy()                # [H,W,3]
-            fig, ax = plt.subplots(1,2, dpi=200)
-            fig.suptitle('Prob: gt {:.3f}, pred {:.3f}'.format(cur_prob[j].item(), F.sigmoid(cur_prob_pred[j]).item()), fontsize=20)
+            fig, ax = plt.subplots(1,2, dpi=100)
+            fig.suptitle('Prob: gt {:.3f}, pred {:.3f}'.format(cur_prob[j].item(), torch.sigmoid(cur_prob_pred[j]).item()), fontsize=20)
             ax[0].imshow(img)
             ax[1].imshow(cur_query)
             if cur_prob[j].item() > 0.5:
@@ -50,7 +51,7 @@ def vis_pred_clip(sample, pred, iter_num, output_dir, subfolder='train'):
                                          draw_bbox_pred[3]-draw_bbox_pred[1], draw_bbox_pred[2]-draw_bbox_pred[0], 
                                          linewidth=1, edgecolor='g', facecolor='none')
                 ax[0].add_patch(rect)
-            if F.sigmoid(cur_prob_pred[j]).item() > 0.5:
+            if torch.sigmoid(cur_prob_pred[j]).item() > 0.5:
                 draw_bbox_pred = dataset_utils.recover_bbox(cur_bbox_pred[j], H, W)  # [4]
                 rect = patches.Rectangle((draw_bbox_pred[1], draw_bbox_pred[0]), 
                                          draw_bbox_pred[3]-draw_bbox_pred[1], draw_bbox_pred[2]-draw_bbox_pred[0], 

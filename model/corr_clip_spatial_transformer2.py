@@ -39,68 +39,89 @@ class ClipMatcher(nn.Module):
         self.window_transformer = config.model.window_transformer
         self.resolution_transformer = config.model.resolution_transformer
 
-        self.clip_reduce = nn.Sequential(
+        # query down heads
+        self.query_down_heads = []
+        for _ in range(int(math.log2(self.query_feat_size))):
+            self.query_down_heads.append(
+                nn.Sequential(
+                    nn.Conv2d(self.backbone_dim, self.backbone_dim, 3, stride=2, padding=1),
+                    nn.BatchNorm2d(self.backbone_dim),
+                    nn.LeakyReLU(inplace=True),
+                )
+            )
+        self.query_down_heads = nn.ModuleList(self.query_down_heads)
+
+        # feature reduce layer
+        self.reduce = nn.Sequential(
             nn.Conv2d(self.backbone_dim, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(inplace=True),
+            nn.Conv2d(256, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(inplace=True),
         )
+        
+        # clip-query correspondence
+        self.CQ_corr_transformer = []
+        for _ in range(1):
+            self.CQ_corr_transformer.append(
+                torch.nn.TransformerDecoderLayer(
+                    d_model=256,
+                    nhead=4,
+                    dim_feedforward=1024,
+                    dropout=0.0,
+                    activation='gelu',
+                    batch_first=True
+                )
+            )
+        self.CQ_corr_transformer = nn.ModuleList(self.CQ_corr_transformer)
 
-        self.query_target_size = []
-        self.down_query_heads = []
-        for i in range(int(math.log2(self.query_feat_size))):
-            self.query_target_size.append((2**i, 2**i))                 # [(1,1), (2,2), (4,4), ..., (query_feat_size//2, query_feat_size//2)]
-            self.down_query_heads.append(nn.Sequential(
-                    nn.Conv2d(self.backbone_dim, 256, 3, padding=1),
-                    nn.BatchNorm2d(256),
-                    nn.LeakyReLU(inplace=True),
-                ))
-        self.down_query_heads = nn.ModuleList(self.down_query_heads)
-
-        self.pe_2d = positionalencoding2d(512, self.clip_feat_size_coarse, self.clip_feat_size_coarse, 'zero')
-        self.pe_2d = nn.parameter.Parameter(0.1 * rearrange(self.pe_2d, '(h w) c -> c h w', h=self.clip_feat_size_coarse))
-
-        self.num_head_layers = int(math.log2(self.clip_feat_size_coarse))
-        self.down_heads = []
-        for _ in range(self.num_head_layers):
+        # feature downsample layers
+        self.num_head_layers, self.down_heads = int(math.log2(self.clip_feat_size_coarse)), []
+        for i in range(self.num_head_layers-1):
+            self.in_channel = 256 if i != 0 else self.backbone_dim
             self.down_heads.append(
                 nn.Sequential(
-                nn.Conv2d(512, 512, 3, padding=1),
-                nn.BatchNorm2d(512),
+                nn.Conv2d(256, 256, 3, stride=2, padding=1),
+                nn.BatchNorm2d(256),
                 nn.LeakyReLU(inplace=True),
             ))
         self.down_heads = nn.ModuleList(self.down_heads)
 
-        self.pe_3d = positionalencoding3d(d_model=512, 
+        # spatial-temporal PE
+        self.pe_3d = positionalencoding3d(d_model=256, 
                                           height=self.resolution_transformer, 
                                           width=self.resolution_transformer, 
                                           depth=config.dataset.clip_num_frames,
-                                          type=config.model.pe_transformer).unsqueeze(0)#.permute(0,2,1) #PositionalEncoding1D(channels=512)
+                                          type=config.model.pe_transformer).unsqueeze(0)
         self.pe_3d = nn.parameter.Parameter(self.pe_3d)
 
-        self.transformer_layer = []
+        # spatial-temporal transformer layer
+        self.feat_corr_transformer = []
         self.num_transformer = config.model.num_transformer
         for _ in range(self.num_transformer):
-            if self.type_transformer == 'global':
-                #self.transformer_layer.append(Block(dim=512, num_heads=4, mlp_ratio=4.))
-                self.transformer_layer.append(
+            self.feat_corr_transformer.append(
                     torch.nn.TransformerEncoderLayer(
-                        d_model=512, 
+                        d_model=256, 
                         nhead=8,
                         dim_feedforward=2048,
                         dropout=0.0,
                         activation='gelu',
                         batch_first=True
                 ))
-            # elif self.type_transformer == 'local':
-            #     self.transformer_layer.append(Block_local(dim=512, kH=self.window_transformer, mlp_ratio=4.))
-        self.transformer_layer = nn.ModuleList(self.transformer_layer)
+        self.feat_corr_transformer = nn.ModuleList(self.feat_corr_transformer)
         self.temporal_mask = None
 
+        # output head
         self.out = nn.Sequential(
+            nn.Linear(1024, 512),
+            nn.Dropout(p=0.2),
+            nn.BatchNorm1d(512),
+            nn.LeakyReLU(inplace=True),
             nn.Linear(512, 256),
             nn.BatchNorm1d(256),
             nn.LeakyReLU(inplace=True),
-            nn.Linear(256, 5)
+            nn.Linear(256, 5),
         )
         self.out.apply(self.init_weights_linear)
 
@@ -126,8 +147,7 @@ class ClipMatcher(nn.Module):
         clip: in shape [b,t,c,h,w]
         query: in shape [b,c,h2,w2]
         '''
-        b, t, c, h, w = clip.shape
-        h2, w2 = query.shape[-2:]
+        b, t = clip.shape[:2]
         clip = rearrange(clip, 'b t c h w -> (b t) c h w')
 
         # get backbone features
@@ -136,39 +156,33 @@ class ClipMatcher(nn.Module):
                 query_feat = self.extract_feature(query)
                 clip_feat = self.extract_feature(clip)
         else:
-            query_feat = self.extract_feature(query)
-            clip_feat = self.extract_feature(clip)
+            query_feat = self.extract_feature(query)        # [b c h w]
+            clip_feat = self.extract_feature(clip)          # (b t) c h w
+        h, w = clip_feat.shape[-2:]
 
-        # resize backbone features
-        clip_feat = self.clip_reduce(clip_feat)
-        if [clip_feat.shape[-2], clip_feat.shape[-1]] != [self.clip_feat_size_coarse, self.clip_feat_size_coarse]:
-            clip_feat = F.interpolate(clip_feat, (self.clip_feat_size_coarse, self.clip_feat_size_coarse), mode='bilinear')
+        all_feat = torch.cat([query_feat, clip_feat], dim=0)
+        all_feat = self.reduce(all_feat)
+        query_feat, clip_feat = all_feat.split([b, b*t], dim=0)
+        
+        query_feat = rearrange(query_feat.unsqueeze(1).repeat(1,t,1,1,1), 'b t c h w -> (b t) (h w) c')  # [b*t,n,c]
+        clip_feat = rearrange(clip_feat, 'b c h w -> b (h w) c')                                         # [b*t,n,c]
+        for layer in self.CQ_corr_transformer:
+            clip_feat = layer(clip_feat, query_feat)                                                     # [b*t,n,c]
+        
+        clip_feat = rearrange(clip_feat, 'b (h w) c -> b c h w', h=h, w=w)
+        #clip_feat = self.reduce(clip_feat)                                                               # [b*t,c,h,w]
 
-        # make multiscale query template
-        query_down = torch.zeros(b, 256, self.clip_feat_size_coarse, self.clip_feat_size_coarse).to(clip_feat.device)
-        for size, down_head in zip(self.query_target_size, self.down_query_heads):
-            cur_query = down_head(F.interpolate(query_feat, size, mode='bilinear'))
-            repeat = (1, 1, self.clip_feat_size_coarse // size[0], self.clip_feat_size_coarse // size[1])
-            cur_query = cur_query.repeat(repeat)
-            query_down += cur_query
-        query_down = query_down.unsqueeze(1).repeat(1,t,1,1,1)
-        query_feat = rearrange(query_down, 'b t c h w -> (b t) c h w')
-
-        # downsample the per-frame features, use transformer for leveraging temporal information
-        feat = torch.cat([clip_feat, query_feat], dim=1) + self.pe_2d.unsqueeze(0).to(clip_feat.device)      
-        for cur_head in self.down_heads:
-            cur_shape = feat.shape[2:]
-            feat = cur_head(F.interpolate(feat, (cur_shape[0]//2, cur_shape[1]//2), mode='bilinear'))
-            if list(feat.shape[-2:]) == [self.resolution_transformer, self.resolution_transformer]:
-                feat = rearrange(feat, '(b t) c h w -> b (t h w) c', b=b) + self.pe_3d
-                mask = self.get_mask(feat, t)
-                for layer in self.transformer_layer:
-                    feat = layer(feat, src_mask=mask)
-                feat = rearrange(feat, 'b (t h w) c -> (b t) c h w', b=b, h=self.resolution_transformer, w=self.resolution_transformer)
-        token = feat.squeeze()      # [b*t,512]
-
-        # make prediction
-        pred = self.out(token)
+        for head in self.down_heads:
+            clip_feat = head(clip_feat)
+            if list(clip_feat.shape[-2:]) == [self.resolution_transformer]*2:
+                clip_feat = rearrange(clip_feat, '(b t) c h w ->b (t h w) c', b=b) + self.pe_3d
+                mask = self.get_mask(clip_feat, t)
+                for layer in self.feat_corr_transformer:
+                    clip_feat = layer(clip_feat, src_mask=mask)
+                clip_feat = rearrange(clip_feat, 'b (t h w) c -> (b t) c h w', b=b, t=t, h=self.resolution_transformer, w=self.resolution_transformer)
+        
+        clip_feat = rearrange(clip_feat, 'b c h w -> b (c h w)')
+        pred = self.out(clip_feat)
         pred = rearrange(pred, '(b t) c -> b t c', b=b, t=t)
         center, hw, prob = pred.split([2, 2, 1], dim=-1)
         bbox = torch.cat([center - hw, center + hw], dim=-1)

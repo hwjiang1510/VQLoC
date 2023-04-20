@@ -7,6 +7,7 @@ config = edict()
 
 # experiment config
 config.exp_name = 'vq2d'
+config.exp_group = 'baseline'
 config.output_dir = './output/'
 config.log_dir = './log'
 config.workers = 8
@@ -25,6 +26,8 @@ config.dataset.clip_num_frames = 8
 config.dataset.clip_sampling = 'rand'
 config.dataset.clip_reader = 'decord'
 config.dataset.frame_interval = 5
+config.dataset.query_padding = False
+config.dataset.query_square = False
 
 # model config
 config.model = edict()
@@ -37,9 +40,11 @@ config.model.type_transformer = 'global'
 config.model.resolution_transformer = 1
 config.model.pe_transformer = 'sinusoidal'
 config.model.window_transformer = 10
+config.model.positive_threshold = 0.2
 
 # loss config
 config.loss = edict()
+config.loss.weight_bbox = 1.0
 config.loss.weight_bbox_center = 1.0
 config.loss.weight_bbox_hw = 1.0
 config.loss.weight_bbox_ratio = 1.0
@@ -54,10 +59,13 @@ config.train.batch_size = 4
 config.train.total_iteration = 50000
 config.train.lr = 0.001
 config.train.weight_decay = 0.0001
+config.train.schedular_warmup_iter = 1000
 config.train.schedualr_milestones = [15000, 30000, 45000]
 config.train.schedular_gamma = 0.3
 config.train.grad_max = 20.0
 config.train.accumulation_step = 1
+config.train.aug_clip = True
+config.train.aug_query = True
 config.train.aug_brightness = 0.2
 config.train.aug_contrast = 0.2
 config.train.aug_saturation = 0.2

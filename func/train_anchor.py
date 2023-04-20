@@ -41,7 +41,7 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
         time_meters.add_loss_value('Prediction time', time.time() - end)
         end = time.time()
 
-        losses = loss_utils.get_losses(config, preds, sample)
+        losses, preds_top = loss_utils.get_losses_with_anchor(config, preds, sample)
         total_loss = 0.0
         for k, v in losses.items():
             if 'loss' in k:
@@ -55,15 +55,6 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
             optimizer.step()
             optimizer.zero_grad()
             schedular.step()
-        
-        # #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.train.grad_max, norm_type=2.0)
-        # scaler.scale(total_loss).backward()
-        # # scaler.unscale_(optimizer)
-        # # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.train.grad_max, norm_type=2.0)
-        # scaler.step(optimizer)
-        # scaler.update()
-        # optimizer.zero_grad()
-        # schedular.step()
         
         time_meters.add_loss_value('Batch time', time.time() - batch_end)
 
@@ -84,7 +75,7 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
 
         if iter_num % config.vis_freq == 0 and rank == 0:
             vis_utils.vis_pred_clip(sample=sample,
-                                    pred=preds,
+                                    pred=preds_top,
                                     iter_num=iter_num,
                                     output_dir=output_dir,
                                     subfolder='train')
@@ -97,7 +88,7 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
                 if 'loss' in k:
                     wandb_log['Train/{}'.format(k)] = v.item()
             wandb_run.log(wandb_log)
-
+        
         dist.barrier()
 
 
@@ -115,11 +106,14 @@ def validate(config, loader, model, epoch, output_dir, device, rank, wandb_run=N
 
             clips, queries = sample['clip'], sample['query']
             preds = model(clips, queries, fix_backbone=config.model.fix_backbone)
-            results = val_performance(config, preds, sample)
+            results, preds_top = val_performance(config, preds, sample)
             try:
                 for k, v in results.items():
                     if k in metrics.keys():
-                        metrics[k].append(v)
+                        try:
+                            metrics[k].append(v)
+                        except:
+                            print('1', k, v, metrics[k], batch_idx)
                     else:
                         metrics[k] = [v]
             except:
@@ -127,7 +121,7 @@ def validate(config, loader, model, epoch, output_dir, device, rank, wandb_run=N
 
             if batch_idx % config.eval_vis_freq == 0 and rank == 0:
                 vis_utils.vis_pred_clip(sample=sample,
-                                        pred=preds,
+                                        pred=preds_top,
                                         iter_num=batch_idx,
                                         output_dir=output_dir,
                                         subfolder='val')
@@ -143,10 +137,21 @@ def validate(config, loader, model, epoch, output_dir, device, rank, wandb_run=N
 
 
 def val_performance(config, preds, gts, prob_theta=0.5):
-    pred_center = rearrange(preds['center'], 'b t c -> (b t) c')
-    pred_hw = rearrange(preds['hw'], 'b t c -> (b t) c')
-    pred_bbox = rearrange(preds['bbox'], 'b t c -> (b t) c')
-    pred_prob = preds['prob'].reshape(-1)
+    pred_center = preds['center']   # [b,t,N,2]
+    pred_hw = preds['hw']           # [b,t,N,2], actually half of hw
+    pred_bbox = preds['bbox']       # [b,t,N,4]
+    pred_prob = preds['prob']       # [b,t,N]
+    b,t,N = pred_prob.shape
+
+    pred_prob = rearrange(pred_prob, 'b t N -> (b t) N')
+    pred_hw = rearrange(pred_hw, 'b t N c -> (b t) N c')
+    pred_center = rearrange(pred_center, 'b t N c -> (b t) N c')
+    pred_bbox = rearrange(pred_bbox, 'b t N c -> (b t) N c')
+
+    pred_prob, top_idx = torch.max(pred_prob, dim=-1)  # [b*t], [b*t]
+    pred_bbox = torch.gather(pred_bbox, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,4)).squeeze()       # [b*t,4]
+    pred_hw = torch.gather(pred_hw, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,2)).squeeze()           # [b*t,2]
+    pred_center = torch.gather(pred_center, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,2)).squeeze()   # [b*t,2]
 
     if 'center' not in gts.keys():
         gts['center'] = (gts['clip_bbox'][...,:2] + gts['clip_bbox'][...,2:]) / 2.0
@@ -173,7 +178,8 @@ def val_performance(config, preds, gts, prob_theta=0.5):
     weight = torch.tensor(config.loss.prob_bce_weight).to(gt_prob.device)
     weight_ = weight[gt_prob[gt_before_query.bool()].long()].reshape(-1)
     criterion = nn.BCEWithLogitsLoss(reduce=False)
-    loss_prob = (criterion(pred_prob[gt_before_query.bool()], gt_prob[gt_before_query.bool()]) * weight_).mean()
+    loss_prob = (criterion(pred_prob[gt_before_query.bool()].float(), 
+                           gt_prob[gt_before_query.bool()].float()) * weight_).mean()
     
     prob_accuracy = ((torch.sigmoid(pred_prob) > prob_theta) == gt_prob.bool()).float().mean()
     prob_accuracy_2 = ((torch.sigmoid(pred_prob) > 0.6) == gt_prob.bool()).float().mean()
@@ -196,4 +202,12 @@ def val_performance(config, preds, gts, prob_theta=0.5):
         'prob_accuracy_0.65': prob_accuracy_4.item(),
     }
 
-    return loss
+    # get top prediction
+    pred_prob = rearrange(pred_prob, '(b t) -> b t', b=b, t=t)           # [b,t]
+    pred_bbox = rearrange(pred_bbox, '(b t) c -> b t c', b=b, t=t)       # [b,t,4]
+    pred_top ={
+        'bbox': pred_bbox,
+        'prob': pred_prob
+    }
+
+    return loss, pred_top

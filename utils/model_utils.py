@@ -60,26 +60,29 @@ def positionalencoding1d(d_model, length):
     return pe
 
 
-def positionalencoding2d(d_model, height, width):
+def positionalencoding2d(d_model, height, width, type='sinusoidal'):
     """
     :param d_model: dimension of the model
     :param height: height of the positions
     :param width: width of the positions
     :return: d_model*height*width position matrix, shape [H*W, C]
     """
-    pe = torch.zeros(d_model, height, width)
-    # Each dimension use half of d_model
-    d_model_origin = d_model
-    d_model = int(d_model / 2)
-    div_term = torch.exp(torch.arange(0., d_model, 2) *
-                         -(math.log(10000.0) / d_model))
-    pos_w = torch.arange(0., width).unsqueeze(1)
-    pos_h = torch.arange(0., height).unsqueeze(1)
-    pe[0:d_model:2, :, :] = torch.sin(pos_h * div_term).transpose(0, 1).unsqueeze(1).repeat(1, width, 1)
-    pe[1:d_model:2, :, :] = torch.cos(pos_h * div_term).transpose(0, 1).unsqueeze(1).repeat(1, width, 1)
-    pe[d_model::2, :, :] = torch.sin(pos_w * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, height)
-    pe[d_model + 1::2, :, :] = torch.cos(pos_w * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, height)
-    pe = rearrange(pe, 'c h w -> (h w) c')[:,:d_model_origin]
+    if type == 'sinusoidal':
+        pe = torch.zeros(d_model, height, width)
+        # Each dimension use half of d_model
+        d_model_origin = d_model
+        d_model = int(d_model / 2)
+        div_term = torch.exp(torch.arange(0., d_model, 2) *
+                            -(math.log(10000.0) / d_model))
+        pos_w = torch.arange(0., width).unsqueeze(1)
+        pos_h = torch.arange(0., height).unsqueeze(1)
+        pe[0:d_model:2, :, :] = torch.sin(pos_h * div_term).transpose(0, 1).unsqueeze(1).repeat(1, width, 1)
+        pe[1:d_model:2, :, :] = torch.cos(pos_h * div_term).transpose(0, 1).unsqueeze(1).repeat(1, width, 1)
+        pe[d_model::2, :, :] = torch.sin(pos_w * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, height)
+        pe[d_model + 1::2, :, :] = torch.cos(pos_w * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, height)
+        pe = rearrange(pe, 'c h w -> (h w) c')[:,:d_model_origin]
+    elif type == 'zero':
+        pe = torch.zeros(height * width, d_model)
     return pe
 
 
@@ -121,3 +124,30 @@ def get_emb(sin_inp):
     """
     emb = torch.stack((sin_inp.sin(), sin_inp.cos()), dim=-1)
     return torch.flatten(emb, -2, -1)
+
+
+def BasicBlock_Conv2D(in_dim, out_dim):
+    module = nn.Sequential(
+                    nn.Conv2d(in_dim, out_dim, 3, padding=1),
+                    nn.BatchNorm2d(out_dim),
+                    nn.LeakyReLU(inplace=True)
+                    )
+    return module
+
+def BasicBlock_MLP(dims):
+    dims_ = dims[:-1]
+    dims1, dims2 = dims_[:-1], dims_[1:]
+    mlp = []
+    for (dim1, dim2) in zip(dims1, dims2):
+        mlp.append(
+            nn.Sequential(
+                nn.Linear(dim1, dim2),
+                nn.BatchNorm1d(dim1),
+                nn.LeakyReLU(inplace=True),
+        ))
+    mlp.append(
+        nn.Sequential(
+            nn.Linear(dims[-2], dims[-1]),
+        ))
+    mlp = nn.Sequential(*mlp)
+    return mlp

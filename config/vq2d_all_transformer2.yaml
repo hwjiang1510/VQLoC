@@ -1,10 +1,11 @@
-exp_name: 'vq2d_baseline_no_transformer_wdecay_0.005_lr0.0001_wgiou_0.3_pe2d_0'
+exp_name: 'vq2d_CQ-layer-1_feat-layer-3-spatial-8-time-5_aug-clip_longer_2head_dropout0.2'
+exp_group: 'vq2d_transformer_all'
 output_dir: './output/'
 log_dir: './log'
 workers: 8
 print_freq: 100
 vis_freq: 1000
-eval_vis_freq: 50
+eval_vis_freq: 100
 seed: 42
 
 # dataset config
@@ -24,46 +25,50 @@ model:
   backbone_type: 'vitb8'
   bakcbone_use_mae_weight: False
   fix_backbone: True
-  num_transformer: 0
+  num_transformer: 3
   type_transformer: 'global'
-  window_transformer: 10
+  resolution_transformer: 8
+  pe_transformer: 'zero'
+  window_transformer: 5
 
 # loss config
 loss:
   weight_bbox_center: 1.0
   weight_bbox_hw: 1.0
-  weight_bbox_ratio: 1.0
   weight_bbox_giou: 0.3
+  weight_bbox_ratio: 1.0
   weight_prob: 1.0
-  prob_bce_weight: [0.3, 0.7]
+  prob_bce_weight: [0.1, 0.9]
 
 # training config
 train:
-  resume: False
-  batch_size: 8
-  total_iteration: 30000
+  resume: True
+  batch_size: 4
+  total_iteration: 60000
   lr: 0.0001
   weight_decay: 0.005
-  schedualr_milestones: [7000, 12000, 17000, 22000]
+  schedualr_milestones: [7000, 14000, 20000, 25000]
   schedular_gamma: 0.3
   grad_max: 20.0
   accumulation_step: 1
-  aug_brightness: 0.2
-  aug_contrast: 0.2
+  aug_clip: True
+  aug_query: False
+  aug_brightness: 0.3
+  aug_contrast: 0.3
   aug_saturation: 0.2
   aug_crop_scale: 0.8
   aug_crop_ratio_min: 0.8
   aug_crop_ratio_max: 1.2
   aug_affine_degree: 90
-  aug_affine_translate: 0.1
-  aug_affine_scale_min: 0.9
-  aug_affine_scale_max: 1.1
+  aug_affine_translate: 0.2
+  aug_affine_scale_min: 0.8
+  aug_affine_scale_max: 1.2
   aug_affine_shear_min: -15.0
   aug_affine_shear_max: 15.0
-  aug_prob_color: 0.2
-  aug_prob_flip: 0.2
-  aug_prob_crop: 0.2
-  aug_prob_affine: 0.2
+  aug_prob_color: 1.0
+  aug_prob_flip: 0.5
+  aug_prob_crop: 1.0
+  aug_prob_affine: 1.0
 
 # test config
 test:

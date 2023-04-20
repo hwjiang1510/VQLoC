@@ -56,7 +56,7 @@ def resume_training(model, optimizer, schedular, scaler, output_dir, cpt_name='c
         optimizer.load_state_dict(checkpoint['optimizer'])
 
         # load schedular
-        #schedular.load_state_dict(checkpoint['schedular'])
+        schedular.load_state_dict(checkpoint['schedular'])
 
         # load scaler
         scaler.load_state_dict(checkpoint['scaler'])
@@ -66,7 +66,7 @@ def resume_training(model, optimizer, schedular, scaler, output_dir, cpt_name='c
 
         # load data
         best_iou = checkpoint['best_iou'] if 'best_iou' in checkpoint.keys() else 0.0
-        best_prob = checkpoint['best_prob'] if 'best_prob' in checkpoint.keys() else float('inf')
+        best_prob = checkpoint['best_prob'] if 'best_prob' in checkpoint.keys() else float('-inf')
 
         return model, optimizer, schedular, scaler, start_epoch, best_iou, best_prob
     else:
