@@ -258,7 +258,7 @@ class QueryVideoDataset(Dataset):
         transform_pad = transforms.Pad(pad_input)
         clip = transform_pad(clip)        # square image
         h_pad, w_pad = clip.shape[-2:]
-        clip = F.interpolate(clip, size=(target_size, target_size), mode='bilinear').squeeze(0)
+        clip = F.interpolate(clip, size=(target_size, target_size), mode='bilinear')#.squeeze(0)
         clip_bbox = clip_bbox / float(h_pad)                # in range [0,1]
         return clip, clip_bbox, query, h, w
 
@@ -299,7 +299,7 @@ class QueryVideoDataset(Dataset):
         clip_with_bbox, clip_bbox = self._get_clip_bbox(sample, clip_idxs)
 
         # clip with square shape, bbox processed accordingly
-        clip, clip_bbox, query = self._process_clip(clip, clip_bbox, clip_with_bbox)
+        clip, clip_bbox, query, clip_h, clip_w = self._process_clip(clip, clip_bbox, clip_with_bbox)
 
         # load query image
         query_canonical = self._get_query(sample, query_path)
@@ -311,7 +311,9 @@ class QueryVideoDataset(Dataset):
             'clip_with_bbox': clip_with_bbox.float(),       # [T]
             'before_query': before_query.bool(),            # [T]
             'clip_bbox': clip_bbox.float().clamp(min=0.0, max=1.0),                 # [T,4]
-            'query': query.float()                          # [3,H2,W2]
+            'query': query.float(),                         # [3,H2,W2]
+            'clip_h': torch.tensor(clip_h),
+            'clip_w': torch.tensor(clip_w),
         }
         return results
     

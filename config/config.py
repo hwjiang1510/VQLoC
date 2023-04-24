@@ -15,6 +15,7 @@ config.print_freq = 100
 config.vis_freq = 300
 config.eval_vis_freq = 20
 config.seed = 42
+config.inference_cache_path = ''
 
 # dataset config
 config.dataset = edict()
@@ -41,6 +42,7 @@ config.model.resolution_transformer = 1
 config.model.pe_transformer = 'sinusoidal'
 config.model.window_transformer = 10
 config.model.positive_threshold = 0.2
+config.model.cpt_path = ''
 
 # loss config
 config.loss = edict()
@@ -87,6 +89,7 @@ config.train.aug_prob_affine = 0.2
 config.test = edict()
 config.test.batch_size = 4
 config.test.compute_metric = True
+config.test.fg_threshold = 0.5
 
 
 def _update_dict(k, v):

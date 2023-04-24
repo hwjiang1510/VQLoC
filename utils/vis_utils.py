@@ -7,6 +7,7 @@ import os
 from dataset import dataset_utils
 import torch
 import torch.nn.functional as F
+from einops import rearrange
 
 
 def vis_pred_clip(sample, pred, iter_num, output_dir, subfolder='train'):
@@ -64,6 +65,42 @@ def vis_pred_clip(sample, pred, iter_num, output_dir, subfolder='train'):
         imageio.mimsave(save_name, frames, 'GIF', duration=0.2)  
 
 
+def vis_pred_clip_inference(clips, queries, pred, save_path, iter_num):
+    #clips = clips.detach().cpu()            # [b,t,c,h,w]
+    queries = queries.detach().cpu()        # [c,h,w]
+    # bbox = pred['bbox_raw']                 # [b*t,4]
+    # prob = torch.sigmoid(pred['prob_raw'])  # [b*t]
+    bbox = pred['bbox']                 # [b*t,4]
+    prob = torch.sigmoid(pred['prob'])  # [b*t]
+    save_name = save_path + f'_{iter_num}.mp4'
+    writer = imageio.get_writer(save_name, fps=5)
+
+    #clips = rearrange(clips, 'b t c h w -> (b t) c h w')
+
+    T, _, H, W = clips.shape
+    _, H2, W2 = queries.shape
+
+    frames = []
+    for i in range(T):
+        cur_clip = clips[i].clamp(min=0.0, max=1.0).permute(1,2,0).numpy()
+        cur_query = queries.clamp(min=0.0, max=1.0).permute(1,2,0).numpy()
+        cur_bbox = bbox[i]#.clamp(min=0.0, max=1.0)
+        cur_prob = prob[i]
+
+        fig, ax = plt.subplots(1,2)
+        fig.suptitle('Prob {:.3f}'.format(cur_prob.item()), fontsize=20)
+        ax[0].imshow(cur_clip)
+        ax[1].imshow(cur_query)
+        if cur_prob.item() > 0.5:
+            draw_bbox_pred = cur_bbox #dataset_utils.recover_bbox(cur_bbox, H, W)  # [4]
+            rect = patches.Rectangle((draw_bbox_pred[0], draw_bbox_pred[1]), 
+                                      draw_bbox_pred[2]-draw_bbox_pred[0], draw_bbox_pred[3]-draw_bbox_pred[1], 
+                                      linewidth=1, edgecolor='b', facecolor='none')
+            ax[0].add_patch(rect)
+        plt.savefig(save_path + '_tmp.jpg')
+        plt.close()
+        writer.append_data(cv2.imread(save_path + '_tmp.jpg')[...,::-1])
+    writer.close()
 
 
 
