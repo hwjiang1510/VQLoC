@@ -15,12 +15,16 @@ from torch.cuda.amp import autocast as autocast
 
 from config.config import config, update_config
 
-## from model.corr_clip_spatial_transformer2_anchor import ClipMatcher
-#from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
-from model.corr_clip_spatial_transformer2_anchor_3heads import ClipMatcher
+#from model.corr_clip import ClipMatcher
+#from model.corr_clip_spatial_transformer import ClipMatcher
+#from model.corr_clip_spatial_transformer2 import ClipMatcher
+from model.corr_clip_spatial_transformer2_2head import ClipMatcher
+#from model.corr_clip_spatial_transformer3 import ClipMatcher
+#from model.corr_clip_pe2d import ClipMatcher
+#from model.corr_clip_spatial_transformer_decoder import ClipMatcher
 from utils import exp_utils, train_utils, dist_utils
 from dataset import dataset_utils
-from func.train_anchor import train_epoch, validate
+from func.train import train_epoch, validate
 
 import transformers
 import wandb
@@ -64,7 +68,7 @@ def main():
     if local_rank == 0:
         wandb_name = config.exp_name
         wandb_proj_name = config.exp_group
-        wandb_run = wandb.init(project=wandb_proj_name, group=wandb_name)#, name='smooth-puddle-94', resume=True)
+        wandb_run = wandb.init(project=wandb_proj_name, group=wandb_name)
         wandb.config.update({
             "exp_name": config.exp_name,
             "batch_size": config.train.batch_size,
@@ -152,7 +156,6 @@ def main():
                     ddp=ddp,
                     wandb_run=wandb_run
                     )
-        torch.cuda.empty_cache()
 
         if local_rank == 0:
             train_utils.save_checkpoint(
@@ -177,7 +180,6 @@ def main():
                                 ddp=ddp,
                                 wandb_run=wandb_run
                                 )
-            torch.cuda.empty_cache()
             if iou > best_iou:
                 best_iou = iou
                 if local_rank == 0:
@@ -207,8 +209,7 @@ def main():
                     checkpoint=output_dir, filename="cpt_best_prob.pth.tar")
 
             logger.info('Rank {}, best iou: {} (current {}), best probability accuracy: {} (current {})'.format(local_rank, best_iou, iou, best_prob, prob))
-        dist.barrier()
-        torch.cuda.empty_cache()
+            dist.barrier()
 
 
 if __name__ == '__main__':

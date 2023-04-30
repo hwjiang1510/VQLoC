@@ -1,4 +1,4 @@
-exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_dropout0.2_positive0.3'
+exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_dropout0.2_positive0.3_qs'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'

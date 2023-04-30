@@ -1,8 +1,8 @@
-exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotrack_inference'
+exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_frame60_320p'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
-workers: 8
+workers: 16
 print_freq: 100
 vis_freq: 1000
 eval_vis_freq: 100
@@ -10,16 +10,17 @@ seed: 42
 
 # dataset config
 dataset:
-  name: 'ego4d_vq2d'
+  name: 'ego4d_egotracks'
+  name_val: 'ego4d_egotracks'
   query_size: 448
   clip_size_fine: 448
   clip_size_coarse: 448
-  clip_num_frames: 30
-  clip_num_frames_val: 30
+  clip_num_frames: 60
+  clip_num_frames_val: 60
   clip_sampling: 'rand'
-  clip_reader: 'decord_balance'   # balance positive and negative samples
+  clip_reader: 'decord_random'   # balance positive and negative samples
+  clip_reader_val: 'decord_random'
   frame_interval: 1
-  query_padding: False
   query_square: True
 
 # model config
@@ -34,11 +35,6 @@ model:
   pe_transformer: 'zero'
   window_transformer: 5
   positive_threshold: 0.3
-  #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_vq2d/vq2d_all_transformer2_anchor_dinov2/default-arch_aug-clip_anchor_focal-w10_2heads_dropout0.2_positive0.4_qs/cpt_last.pth.tar'
-  #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_vq2d/vq2d_all_transformer2_anchor_dinov2/vq2d_CQ-layer-1_feat-layer-3-spatial-8-time-5_aug-clip_longer_anchor_focal-loss-w10_2heads_dropout0.2_positive0.3_dinov2/cpt_best_iou_cp.pth.tar'
-  #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_vq2d/vq2d_all_transformer2_anchor_dinov2/vq2d_CQ-layer-1_feat-layer-3-spatial-8-time-5_aug-clip_longer_anchor_focal-loss-w10_2heads_dropout0.2_positive0.3_dinov2_qs/cpt_last.pth.tar'
-  cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks/cpt_last.pth.tar'
-  #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_longer/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_frame60/cpt_last.pth.tar'
 
 # loss config
 loss:
@@ -60,7 +56,7 @@ train:
   schedular_gamma: 0.3
   grad_max: 20.0
   accumulation_step: 1
-  aug_clip: False
+  aug_clip: True
   aug_query: False
   aug_brightness: 0.3
   aug_contrast: 0.3

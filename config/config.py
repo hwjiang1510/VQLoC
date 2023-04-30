@@ -16,16 +16,20 @@ config.vis_freq = 300
 config.eval_vis_freq = 20
 config.seed = 42
 config.inference_cache_path = ''
+config.debug = False
 
 # dataset config
 config.dataset = edict()
 config.dataset.name = 'ego4d_vq2d'
+config.dataset.name_val = 'ego4d_vq2d'
 config.dataset.query_size = 256
 config.dataset.clip_size_fine = 256
 config.dataset.clip_size_coarse = 256
-config.dataset.clip_num_frames = 8
+config.dataset.clip_num_frames = 30
+config.dataset.clip_num_frames_val = 30
 config.dataset.clip_sampling = 'rand'
-config.dataset.clip_reader = 'decord'
+config.dataset.clip_reader = 'decord_balance'
+config.dataset.clip_reader_val = 'decord_balance'
 config.dataset.frame_interval = 5
 config.dataset.query_padding = False
 config.dataset.query_square = False

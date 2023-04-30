@@ -28,10 +28,12 @@ class Task:
     def run(self, model, config, device):
         clip_uid = self.annots[0]["clip_uid"]
 
+        if clip_uid is None:
+            return 
         clip_path = os.path.join(self.clip_dir, clip_uid  + '.mp4')
         if not os.path.exists(clip_path):
             print(f"Clip {clip_uid} does not exist")
-            return {}
+            return 
 
         for key, annot in zip(self.keys, self.annots):
             annotation_uid = annot["metadata"]["annotation_uid"]
@@ -130,7 +132,7 @@ def inference_video(config, model, clip_path, query_frame, visual_crop, save_pat
         ret_bboxes.append(preds_top['bbox'])
         ret_scores.append(preds_top['prob'])
 
-        # if device == torch.device("cuda:0"):
+        # if device == torch.device("cuda:0") and config.debug:
         #     vis_utils.vis_pred_clip_inference(clips=clips_origin, 
         #                             queries=query_raw,
         #                             pred=preds_top,

@@ -31,6 +31,7 @@ class QueryVideoDataset(Dataset):
                  meta_dir='/vision/hwjiang/episodic-memory/VQ2D/data',
                  split='train',
                  clip_reader='decord_balance',
+                 eval_vis_freq=50,
                  ):
         
         self.dataset_name = dataset_name
@@ -46,6 +47,8 @@ class QueryVideoDataset(Dataset):
 
         self.clip_reader = video_reader_dict[clip_reader]
         self._load_metadata()
+        if self.split != 'train':
+            self.annotations = self.annotations[::eval_vis_freq]
 
 
     def _load_metadata(self):
@@ -261,7 +264,6 @@ class QueryVideoDataset(Dataset):
         clip = F.interpolate(clip, size=(target_size, target_size), mode='bilinear')#.squeeze(0)
         clip_bbox = clip_bbox / float(h_pad)                # in range [0,1]
         return clip, clip_bbox, query, h, w
-
 
     def __len__(self):
         return len(self.annotations)

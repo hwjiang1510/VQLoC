@@ -41,7 +41,7 @@ def load_query(config, clip_reader, visual_crop, clip_path):
         bbox = dataset_utils.bbox_torchTocv2(bbox).tolist()
 
     # crop image to get query
-        query = query.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+    query = query.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
 
     # pad query
     if config.dataset.query_padding:

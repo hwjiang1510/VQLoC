@@ -35,8 +35,9 @@ class WorkerWithDevice(mp.Process):
         device = torch.device(f"cuda:{self.device_id}")
 
         model = ClipMatcher(self.config).to(device)
+        print('Model with {} parameters'.format(sum(p.numel() for p in model.parameters())))
         checkpoint = torch.load(self.config.model.cpt_path, map_location='cpu')
-        model.load_state_dict(checkpoint["state_dict"])
+        model.load_state_dict(checkpoint["state_dict"], strict=True)
         model.eval()
         del checkpoint
 
@@ -63,6 +64,8 @@ def perform_vq2d_inference(annotations, config):
     results_queue = mp.Queue()
 
     num_processes = num_gpus
+    if config.debug:
+        num_processes = 1
 
     pbar = tqdm.tqdm(
         desc=f"Computing VQ2D predictions",
@@ -124,6 +127,7 @@ if __name__ == '__main__':
     clipwise_annotations_list = eval_utils.convert_annotations_to_clipwise_list(annotations)
 
     if args.debug:
+        config.debug = True
         clips_list = list(clipwise_annotations_list.keys())
         clips_list = sorted([c for c in clips_list if c is not None])
         clips_list = clips_list[: 20]

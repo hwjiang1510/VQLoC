@@ -3,6 +3,7 @@ import os
 import torch
 import decord
 import cv2
+import numpy as np
 from PIL import Image
 from dataset import dataset_utils
 from evaluation.test_dataloader import load_query, load_clip, process_inputs
@@ -18,6 +19,7 @@ DISTANCE = 25
 WIDTH = 3
 PROMINENCE = 0.2
 PEAK_SCORE_THRESHILD = 0.5
+PEAK_WINDWOW_RATIO = 0.5
 
 
 class Task:
@@ -68,21 +70,24 @@ class Task:
             ret_scores_sm = medfilt(ret_scores, kernel_size=SMOOTHING_SIGMA)
 
             peaks, _ = find_peaks(ret_scores_sm)
+            peaks, threshold = process_peaks(peaks, ret_scores_sm)
+            #threshold = PEAK_SCORE_THRESHILD
+
             recent_peak = None
             for peak in peaks[::-1]:
-                if ret_scores_sm[peak] >= PEAK_SCORE_THRESHILD:
+                if ret_scores_sm[peak] >= threshold:
                     recent_peak = peak
                     break
 
             if recent_peak is not None:
                 latest_idx = [recent_peak]
                 for idx in range(recent_peak, 0, -1):
-                    if ret_scores_sm[idx] >= PEAK_SCORE_THRESHILD:
+                    if ret_scores_sm[idx] >= threshold:
                         latest_idx.append(idx)
                     else:
                         break
                 for idx in range(recent_peak, query_frame-1):
-                    if ret_scores_sm[idx] >= PEAK_SCORE_THRESHILD:
+                    if ret_scores_sm[idx] >= threshold:
                         latest_idx.append(idx)
                     else:
                         break
@@ -104,3 +109,23 @@ class Task:
         return all_pred_rts
 
 
+def process_peaks(peaks_idx, ret_scores_sm):
+    '''
+    process the peaks based on their scores
+    1. if there are peaks with value larger than PEAK_SCORE_THRESHILD (0.5)
+        calculate the mean value of them, its PEAK_WINDWOW_RATIO (0.6) time score is the threshold
+    2. else, do the same on all peaks
+    '''
+    peaks_score = ret_scores_sm[peaks_idx]
+
+    valid_peaks_idx_idx = np.where(peaks_score > PEAK_SCORE_THRESHILD)[0]
+    valid_peaks_idx = peaks_idx[valid_peaks_idx_idx]
+
+    if valid_peaks_idx.shape[0] > 0:
+        valid_peaks_score = peaks_score[valid_peaks_idx_idx]
+        threshold = np.mean(valid_peaks_score) * PEAK_WINDWOW_RATIO
+        new_peaks_idx = valid_peaks_idx
+    else:
+        threshold = np.mean(peaks_score) * PEAK_WINDWOW_RATIO
+        new_peaks_idx = peaks_idx
+    return new_peaks_idx, threshold

@@ -8,6 +8,7 @@ import torch.optim
 import itertools
 import argparse
 from dataset.base_dataset import QueryVideoDataset
+from dataset.egotracks_dataset import EgoTracksDataset
 import kornia
 import kornia.augmentation as K
 from kornia.constants import DataKey
@@ -19,7 +20,15 @@ NORMALIZE_STD = [0.229, 0.224, 0.225]
 
 
 def get_dataset(config, split='train'):
-    dataset_name = config.dataset.name
+    if split == 'train':
+        clip_num_frames = config.dataset.clip_num_frames
+        clip_reader = config.dataset.clip_reader
+        dataset_name = config.dataset.name
+    else:
+        clip_num_frames = config.dataset.clip_num_frames_val
+        clip_reader = config.dataset.clip_reader_val
+        dataset_name = config.dataset.name_val
+
     query_params = {
         'query_size': config.dataset.query_size,
         'query_padding': config.dataset.query_padding,
@@ -28,17 +37,26 @@ def get_dataset(config, split='train'):
     clip_params = {
         'fine_size': config.dataset.clip_size_fine,
         'coarse_size': config.dataset.clip_size_coarse,
-        'clip_num_frames': config.dataset.clip_num_frames,
+        'clip_num_frames': clip_num_frames,
         'sampling': config.dataset.clip_sampling,
         'frame_interval': config.dataset.frame_interval,
     }
+
     if dataset_name == 'ego4d_vq2d':
         dataset = QueryVideoDataset(
             dataset_name=dataset_name,
             query_params=query_params,
             clip_params=clip_params,
             split=split,
-            clip_reader=config.dataset.clip_reader
+            clip_reader=clip_reader
+        )
+    elif dataset_name == 'ego4d_egotracks':
+        dataset = EgoTracksDataset(
+            dataset_name=dataset_name,
+            query_params=query_params,
+            clip_params=clip_params,
+            split=split,
+            clip_reader=clip_reader
         )
     return dataset
 

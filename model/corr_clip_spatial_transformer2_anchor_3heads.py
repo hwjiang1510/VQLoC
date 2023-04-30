@@ -133,6 +133,12 @@ class ClipMatcher(nn.Module):
         # output head
         self.head = Head(in_dim=256)
 
+        # probability refinement head
+        self.head_prob = Head_prob(config=config,
+                                   h=self.resolution_transformer, 
+                                   w=self.resolution_transformer,
+                                   dim=n_aspect_ratios*n_base_sizes)
+
     def init_weights_linear(self, m):
         if type(m) == nn.Linear:
             #nn.init.xavier_uniform_(m.weight)
@@ -206,12 +212,15 @@ class ClipMatcher(nn.Module):
         center, hw = bbox_refine.split([2,2], dim=-1)                           # represented by [c_x, c_y, h, w]
         hw = 0.5 * hw                                                           # anchor's hw is defined as real hw
         bbox = torch.cat([center - hw, center + hw], dim=-1)                    # [b,t,N,4]
+        
+        prob_refine = self.head_prob(prob)                                # [b,t]
 
         result = {
             'center': center,           # [b,t,N,2]
             'hw': hw,                   # [b,t,N,2]
             'bbox': bbox,               # [b,t,N,4]
-            'prob': prob.squeeze(-1)    # [b,t,N]
+            'prob': prob.squeeze(-1),   # [b,t,N]
+            'prob_refine': prob_refine  # [b,t]
         }
         return result
     
@@ -264,6 +273,8 @@ class Head(nn.Module):
         self.regression_head.apply(self.init_weights_conv)
         self.classification_head.apply(self.init_weights_conv)
 
+
+
     def init_weights_conv(self, m):
         if type(m) == nn.Conv2d:
             nn.init.normal_(m.weight, mean=0.0, std=1e-6)
@@ -292,3 +303,99 @@ class Head(nn.Module):
         out_cls = rearrange(out_cls, 'B (n m c) h w -> B (h w n m) c', h=h, w=w, n=self.n, m=self.m, c=1)
 
         return out_reg, out_cls
+
+
+class Head_prob(nn.Module):
+    def __init__(self, config, h=8, w=8, dim=n_base_sizes*n_aspect_ratios):
+        super(Head_prob, self).__init__()
+
+        self.dim = dim
+        self.h = h
+        self.w = w
+        self.config = config
+        self.window_transformer = config.model.window_transformer
+
+        # spatial-temporal PE
+        pe_3d = torch.zeros(1, config.dataset.clip_num_frames*h*w, self.dim)
+        self.pe_3d = nn.parameter.Parameter(pe_3d)
+
+        # feature transformer
+        self.temporal_mask = None
+        self.feat_corr_transformer = []
+        self.num_transformer = 1
+        for _ in range(self.num_transformer):
+            self.feat_corr_transformer.append(
+                    torch.nn.TransformerEncoderLayer(
+                        d_model=self.dim, 
+                        nhead=1,
+                        dim_feedforward=int(4 * self.dim),
+                        dropout=0.0,
+                        activation='gelu',
+                        batch_first=True
+                ))
+        self.feat_corr_transformer = nn.ModuleList(self.feat_corr_transformer)
+
+        # conv layers
+        n_layers = int(math.log2(self.h))
+        self.conv_layer = []
+        for _ in range(n_layers):
+            self.conv_layer.append(nn.Sequential(
+                nn.Conv2d(self.dim, self.dim, 3, stride=2, padding=1),
+                nn.BatchNorm2d(self.dim),
+            ))
+        self.conv_layer = nn.ModuleList(self.conv_layer)
+
+        # final mlp
+        self.mlp = nn.Sequential(
+            nn.Linear(self.dim, self.dim),
+            nn.BatchNorm1d(self.dim),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(self.dim, 1),
+        )
+        self.mlp.apply(self.init_weights_linear)
+
+
+    def init_weights_linear(self, m):
+        if type(m) == nn.Linear:
+            #nn.init.xavier_uniform_(m.weight)
+            nn.init.normal_(m.weight, mean=0.0, std=1e-6)
+            nn.init.normal_(m.bias, mean=0.0, std=1e-6)
+
+
+    def forward(self, x):
+        '''
+        x in shape [b,t,N=h*w*n,c=1]
+        '''
+        b, t = x.shape[:2]
+
+        x = x.squeeze(-1)
+        x = rearrange(x, 'b t (h w n) -> b (t h w) n', h=self.h, w=self.w, n=self.dim) #+ self.pe_3d
+        
+        # mask = self.get_mask(x, t=t)
+        # for layer in self.feat_corr_transformer:
+        #     x = layer(x, src_mask=mask)
+        
+        x = rearrange(x, 'b (t h w) n -> (b t) n h w', t=t, h=self.h, w=self.w, n=self.dim)
+        for layer in self.conv_layer:
+            x = layer(x)
+        x = x.squeeze()
+
+        x = self.mlp(x).squeeze()   # [b*t]
+        x = rearrange(x, '(b t) -> b t', b=b, t=t)
+        return x
+    
+    def get_mask(self, src, t):
+        if not torch.is_tensor(self.temporal_mask):
+            hw = src.shape[1] // t
+            thw = src.shape[1]
+            mask = torch.ones(thw, thw).float() * float('-inf')
+
+            window_size = self.window_transformer // 2
+
+            for i in range(t):
+                min_idx = max(0, (i-window_size)*hw)
+                max_idx = min(thw, (i+window_size+1)*hw)
+                mask[i*hw: (i+1)*hw, min_idx: max_idx] = 0.0
+            mask = mask.to(src.device)
+            self.temporal_mask = mask
+        return self.temporal_mask

@@ -13,7 +13,11 @@ def get_losses_with_anchor(config, preds, gts):
     pred_hw = preds['hw']           # [b,t,N,2], actually half of hw
     pred_bbox = preds['bbox']       # [b,t,N,4]
     pred_prob = preds['prob']       # [b,t,N]
-    b,t,N = pred_prob.shape
+    if 'prob_refine' in preds.keys():
+        pred_prob_refine = preds['prob_refine']     # [b,t]
+    if 'giou' in preds.keys():
+        pred_giou = preds['giou']                   # [b,t]             
+    b,t,N = pred_prob.shape 
     device = pred_prob.device
 
     if 'center' not in gts.keys():
@@ -57,19 +61,20 @@ def get_losses_with_anchor(config, preds, gts):
         iou = torch.tensor(0.).cuda()
         giou = torch.tensor(0.).cuda()
 
-    # occurance loss
+    # anchor box occurance loss
     pred_prob = rearrange(pred_prob, 'b t N -> (b t N)')
     gt_before_query_replicate = rearrange(gt_before_query.unsqueeze(2).repeat(1,1,N), 'b t N -> (b t N)')
-    # weight = torch.tensor(config.loss.prob_bce_weight).to(gt_prob.device)
-    # weight_ = weight[positive[gt_before_query_replicate.bool()].long()].reshape(-1)
-    # criterion = nn.BCEWithLogitsLoss(reduce=False)
-    # loss_prob = (criterion(pred_prob[gt_before_query_replicate.bool()].float(),
-    #                        positive[gt_before_query_replicate.bool()].float())
-    #             * weight_).mean()
-
-    # loss_prob using focal loss
     loss_prob = focal_loss(pred_prob[gt_before_query_replicate.bool()].float(),
                            positive[gt_before_query_replicate.bool()].float())
+    
+    # probability loss
+    if 'prob_refine' in preds.keys():
+        pred_prob_refine = pred_prob_refine.reshape(-1)
+        weight = torch.tensor(config.loss.prob_bce_weight).to(gt_prob.device)
+        weight_ = weight[gt_prob[gt_before_query.bool()].long()].reshape(-1)
+        criterion = nn.BCEWithLogitsLoss(reduce=False)
+        loss_prob_refine = (criterion(pred_prob_refine[gt_before_query.reshape(-1).bool()], 
+                                      gt_prob[gt_before_query.bool()]) * weight_).mean()
 
     loss = {
         'loss_bbox_center': loss_center,
@@ -85,19 +90,52 @@ def get_losses_with_anchor(config, preds, gts):
         'iou': iou.detach(),
         'giou': giou.detach()
     }
+    if 'prob_refine' in preds.keys():
+        loss.update({
+            'loss_prob_refine': loss_prob_refine,
+            'weight_prob_refine': 1.0
+        })
 
     # get top prediction
     pred_prob = rearrange(pred_prob, '(B N) -> B N', N=N)                                       # [b*t,N]
     pred_bbox = rearrange(pred_bbox, '(B N) c -> B N c', N=N)                                   # [b*t,N,4]
     pred_prob_top, top_idx = torch.max(pred_prob, dim=-1)                                       # [b*t], [b*t]
     pred_bbox_top = torch.gather(pred_bbox, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,4)).squeeze()   # [b*t,4]
-    pred_top ={
+    pred_top = {
         'bbox': rearrange(pred_bbox_top, '(b t) c -> b t c', b=b, t=t),
         'prob': rearrange(pred_prob_top, '(b t) -> b t', b=b, t=t)
     }
+    if 'prob_refine' in preds.keys():
+        pred_top = {
+            'bbox': rearrange(pred_bbox_top, '(b t) c -> b t c', b=b, t=t),
+            'prob_anchor': rearrange(pred_prob_top, '(b t) -> b t', b=b, t=t),
+            'prob': rearrange(pred_prob_refine, '(b t) -> b t', b=b, t=t)
+        }
 
     return loss, pred_top
 
+
+def get_losses_head(config, refine_prob, gts):
+    '''
+    refine_prob in shape [b,t]
+    '''
+    gt_prob = gts['clip_with_bbox']         # [b,t]
+    gt_before_query = gts['before_query']   # [b,t]
+
+    gt_prob = gt_prob.reshape(-1)
+    refine_prob = refine_prob.reshape(-1)
+    gt_before_query = gt_before_query.reshape(-1)
+
+    weight = torch.tensor(config.loss.prob_bce_weight).to(gt_prob.device)
+    weight_ = weight[gt_prob[gt_before_query.bool()].long()]
+    criterion = nn.BCEWithLogitsLoss(reduce=False)
+    loss_prob_refine = (criterion(refine_prob[gt_before_query.reshape(-1).bool()], 
+                                      gt_prob[gt_before_query.bool()]) * weight_).mean()
+    loss = {
+        'loss_refine_prob': loss_prob_refine,
+        'weight_refine_prob': 1.0
+    }
+    return loss
 
 
 def get_losses(config, preds, gts):

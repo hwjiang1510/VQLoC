@@ -15,12 +15,11 @@ from torch.cuda.amp import autocast as autocast
 
 from config.config import config, update_config
 
-## from model.corr_clip_spatial_transformer2_anchor import ClipMatcher
-#from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
-from model.corr_clip_spatial_transformer2_anchor_3heads import ClipMatcher
+from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
+from model.corr_clip_spatial_transformer2_anchor_3heads import Head_prob
 from utils import exp_utils, train_utils, dist_utils
 from dataset import dataset_utils
-from func.train_anchor import train_epoch, validate
+from func.train_head import train_epoch, validate
 
 import transformers
 import wandb
@@ -83,21 +82,23 @@ def main():
     # get model
     model = ClipMatcher(config).to(device)
     #model = torch.compile(model)
+    head = Head_prob(config).to(device)
 
     # get optimizer
-    optimizer = train_utils.get_optimizer(config, model)
-    # schedular = train_utils.get_schedular(config, optimizer)
+    optimizer = optimizer = torch.optim.AdamW(head.parameters(),
+                                            lr=config.train.lr,
+                                            weight_decay=config.train.weight_decay)
     schedular = transformers.get_linear_schedule_with_warmup(optimizer,
-                                                             num_warmup_steps=config.train.schedular_warmup_iter,
+                                                             num_warmup_steps=1,#config.train.schedular_warmup_iter,
                                                              num_training_steps=config.train.total_iteration)
     scaler = torch.cuda.amp.GradScaler()
 
-    best_iou, best_prob = 0.0, 0.0
+    best_prob = 0.0
     ep_resume = None
     if config.train.resume:
         try:
-            model, optimizer, schedular, scaler, ep_resume, best_iou, best_prob = train_utils.resume_training(
-                                                                                model, optimizer, schedular, scaler, 
+            head, optimizer, schedular, scaler, ep_resume, best_iou, best_prob = train_utils.resume_training(
+                                                                                head, optimizer, schedular, scaler, 
                                                                                 output_dir,
                                                                                 cpt_name='cpt_last.pth.tar')
             print('LR after resume {}'.format(optimizer.param_groups[0]['lr']))
@@ -106,12 +107,12 @@ def main():
 
     # distributed training
     ddp = False
-    model =  torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(head)
     if device == torch.device("cuda"):
         torch.backends.cudnn.benchmark = True
         device_ids = range(torch.cuda.device_count())
         print("using {} cuda".format(len(device_ids)))
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=True)
+        head = torch.nn.parallel.DistributedDataParallel(head, device_ids=[local_rank], find_unused_parameters=True)
         device_num = len(device_ids)
         ddp = True
 
@@ -142,6 +143,7 @@ def main():
         train_epoch(config,
                     loader=train_loader,
                     model=model,
+                    head=head,
                     optimizer=optimizer,
                     schedular=schedular,
                     scaler=scaler,
@@ -158,7 +160,7 @@ def main():
             train_utils.save_checkpoint(
                     {
                         'epoch': epoch + 1,
-                        'state_dict': model.module.state_dict(),
+                        'state_dict': head.module.state_dict(),
                         'optimizer': optimizer.state_dict(),
                         'schedular': schedular.state_dict(),
                         'scaler': scaler.state_dict(),
@@ -167,9 +169,10 @@ def main():
 
         if epoch % 5 == 0:
             print('Doing validation...')
-            iou, prob = validate(config,
+            prob = validate(config,
                                 loader=val_loader,
                                 model=model,
+                                head=head,
                                 epoch=epoch,
                                 output_dir=output_dir,
                                 device=device,
@@ -178,27 +181,13 @@ def main():
                                 wandb_run=wandb_run
                                 )
             torch.cuda.empty_cache()
-            if iou > best_iou:
-                best_iou = iou
-                if local_rank == 0:
-                    train_utils.save_checkpoint(
-                    {
-                        'epoch': epoch + 1,
-                        'state_dict': model.module.state_dict(),
-                        'optimizer': optimizer.state_dict(),
-                        'schedular': schedular.state_dict(),
-                        'scaler': scaler.state_dict(),
-                        'best_iou': best_iou,
-                    }, 
-                    checkpoint=output_dir, filename="cpt_best_iou.pth.tar")
-
             if prob > best_prob:
                 best_prob = prob
                 if local_rank == 0:
                     train_utils.save_checkpoint(
                     {
                         'epoch': epoch + 1,
-                        'state_dict': model.module.state_dict(),
+                        'state_dict': head.module.state_dict(),
                         'optimizer': optimizer.state_dict(),
                         'schedular': schedular.state_dict(),
                         'scaler': scaler.state_dict(),
@@ -206,7 +195,7 @@ def main():
                     }, 
                     checkpoint=output_dir, filename="cpt_best_prob.pth.tar")
 
-            logger.info('Rank {}, best iou: {} (current {}), best probability accuracy: {} (current {})'.format(local_rank, best_iou, iou, best_prob, prob))
+            logger.info('Rank {}, best probability accuracy: {} (current {})'.format(local_rank, best_prob, prob))
         dist.barrier()
         torch.cuda.empty_cache()
 
