@@ -34,18 +34,18 @@ def get_losses_with_anchor(config, preds, gts):
     # assign labels to anchors
     if gt_prob.bool().any():
         assign_label = assign_labels(anchor, gt_bbox, 
-                                    iou_threshold=config.model.positive_threshold,
-                                    topk=config.model.positive_topk)                # [b,t,N]
+                                     iou_threshold=config.model.positive_threshold,
+                                     topk=config.model.positive_topk)               # [b,t,N]
         positive = torch.logical_and(gt_prob.unsqueeze(-1).repeat(1,1,N).bool(),
-                                    assign_label.bool())                            # [b,t,N]
-        positive = rearrange(positive, 'b t N -> (b t N)')                           # [b*t*N]
+                                     assign_label.bool())                           # [b,t,N]
+        positive = rearrange(positive, 'b t N -> (b t N)')                          # [b*t*N]
     else:
-        #print('no positive label')
         positive = torch.zeros(b,t,N).reshape(-1).bool().to(device)
     loss_mask = positive.float().unsqueeze(1)                                    # [b*t*N,1]
 
     #print((pred_bbox-anchor).mean().item(), positive.sum().item(), torch.ones_like(positive).sum().item(), gt_prob.unsqueeze(-1).repeat(1,1,N).sum().item())
     
+    # anchor box regression loss
     if torch.sum(positive.float()).item() > 0:
         # bbox center loss
         pred_center = rearrange(pred_center, 'b t N c -> (b t N) c')
@@ -72,10 +72,13 @@ def get_losses_with_anchor(config, preds, gts):
         giou = torch.tensor(0.).cuda()
 
     # anchor box occurance loss
-    pred_prob = rearrange(pred_prob, 'b t N -> (b t N)')
-    gt_before_query_replicate = rearrange(gt_before_query.unsqueeze(2).repeat(1,1,N), 'b t N -> (b t N)')
-    loss_prob = focal_loss(pred_prob[gt_before_query_replicate.bool()].float(),
-                           positive[gt_before_query_replicate.bool()].float())
+    if config.train.use_hnm:
+        loss_prob = BCELogitsLoss_with_HNM(pred_prob, gt_prob, positive, gt_before_query)
+    else:
+        pred_prob = rearrange(pred_prob, 'b t N -> (b t N)')
+        gt_before_query_replicate = rearrange(gt_before_query.unsqueeze(2).repeat(1,1,N), 'b t N -> (b t N)')
+        loss_prob = focal_loss(pred_prob[gt_before_query_replicate.bool()].float(),
+                            positive[gt_before_query_replicate.bool()].float())
     
     # probability loss
     if 'prob_refine' in preds.keys():
@@ -300,4 +303,78 @@ def focal_loss(inputs, targets, alpha=0.25, gamma=2.0):
     #F_loss = alpha * BCE_loss
 
     return F_loss.mean()
+
+
+def BCELogitsLoss_with_HNM(pred_prob, gt_prob, positive, gt_before_query):
+    '''
+    pred_prob: predicted probability of anchors, in shape [b,t,N], without sigmoid
+    gt_prob: GT probability of frames, in shape [b,t]
+    positive: assigned labels of anchors, in shape [b*t*N]
+    gt_before_query: mask for frames before query frame, in shape [b,t]
+    '''
+    b,t,N = pred_prob.shape
+    gt_prob = gt_prob.unsqueeze(-1).repeat(1,1,N)   # [b,t,N]
+
+    pred_prob = rearrange(pred_prob, 'b t N -> (b t N)')                                # [b*t*N]
+    gt_prob = rearrange(gt_prob, 'b t N -> (b t N)')                                    # [b*t*N]
+    BCE_loss = F.binary_cross_entropy_with_logits(pred_prob, gt_prob, reduction='none') # [b*t*N]
+
+    pred_prob = rearrange(pred_prob, '(b t N) -> (b t) N')
+    gt_prob = rearrange(gt_prob, '(b t N) -> (b t) N')
+    BCE_loss = rearrange(BCE_loss, '(b t N) -> (b t) N')
+    positive = rearrange(positive, '(b t N) -> (b t) N')
+    gt_before_query = rearrange(gt_before_query, 'b t -> (b t)')
+
+    loss = HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query)
+
+    return loss.mean()
+
+
+def HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query, ratio_pos_neg=3., ratio_hard=0.1):
+    '''
+    ratio: positive / negative ratio
+    pred_prob, gt_prob, positive, BCE_loss in [B,N]
+    gt_before_query in [B]
+    topk is the number of negatives we keep if no positive assigned
+    Mine the anchor boxes with three type:
+        1. query object doesn't occur
+        2. query object occurs and some anchors are assigned as positive
+        3. query object occurs but no anchors are assigned as positive
+    '''
+    # N = 16*16*12 or 8*8*12
+    B, N = pred_prob.shape
+    topK = int(N * ratio_hard)  # the number of anchors retained if no positive assigned
+
+    mined_loss = []
+    for i in range(B):
+        cur_prob = pred_prob[i][gt_before_query.bool()]         # [N], for all anchor box in the frame
+        cur_prob_gt = gt_prob[i][gt_before_query.bool()]        # [N]
+        cur_positive = positive[i][gt_before_query.bool()]      # [N]
+        cur_loss = BCE_loss[i][gt_before_query.bool()]          # [N]
+
+        cur_loss_positives = cur_loss[cur_positive.bool()]
+        cur_loss_negatives = cur_loss[~cur_positive.bool()]
+
+        if cur_prob_gt.any() and cur_positive.any():
+            # case 2
+            num_positives = int(cur_positive.sum().item())
+            num_negatives = int(num_positives * ratio_pos_neg)
+            cur_loss_negatives_hard, hard_neg_idxs = torch.topk(cur_loss_negatives, num_negatives)
+            mined_loss.append(cur_loss_negatives_hard)
+            mined_loss.append(cur_loss_positives)
+        else:
+            # case 1 and 3
+            cur_loss_hard, hard_idxs = torch.topk(cur_loss, topK)
+            mined_loss.append(cur_loss_hard)
+    
+    mined_loss = torch.cat(mined_loss, dim=0)
+    return mined_loss
+
+
+
+
+
+
+
+
 

@@ -70,19 +70,19 @@ class Task:
 
             ret_scores_sm = medfilt(ret_scores, kernel_size=SMOOTHING_SIGMA)
 
-            gt_scores = np.zeros_like(ret_scores_sm)
-            len_clip = gt_scores.shape[0]
-            gt_rt_idx = [int(frame_it['frame_number']) for frame_it in annot['response_track']]
-            for frame_it in gt_rt_idx:
-                gt_scores[min(frame_it, len_clip-1)] = random.uniform(0.6,1)
-            ret_scores_sm = gt_scores.copy()
+            # gt_scores = np.zeros_like(ret_scores_sm)
+            # len_clip = gt_scores.shape[0]
+            # gt_rt_idx = [int(frame_it['frame_number']) for frame_it in annot['response_track']]
+            # for frame_it in gt_rt_idx:
+            #     gt_scores[min(frame_it, len_clip-1)] = random.uniform(0.6,1)
+            # ret_scores_sm = gt_scores.copy()
 
             peaks, _ = find_peaks(ret_scores_sm)
             if len(peaks) == 0:
                 print(ret_scores_sm)
             peaks, threshold = process_peaks(peaks, ret_scores_sm)
             #threshold = PEAK_SCORE_THRESHILD
-            threshold = 0.5
+            #threshold = 0.5
 
             recent_peak = None
             for peak in peaks[::-1]:

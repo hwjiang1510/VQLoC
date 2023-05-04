@@ -92,6 +92,7 @@ config.train.aug_prob_color = 0.2
 config.train.aug_prob_flip = 0.2
 config.train.aug_prob_crop = 0.2
 config.train.aug_prob_affine = 0.2
+config.train.use_hnm = False
 
 # test config
 config.test = edict()
