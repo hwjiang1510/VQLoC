@@ -345,12 +345,18 @@ def HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query, ratio
     B, N = pred_prob.shape
     topK = int(N * ratio_hard)  # the number of anchors retained if no positive assigned
 
+    pred_prob = pred_prob[gt_before_query.bool()]    # reject unreliable annotations after query frame
+    gt_prob = gt_prob[gt_before_query.bool()]
+    positive = positive[gt_before_query.bool()]
+    BCE_loss = BCE_loss[gt_before_query.bool()]
+    B = pred_prob.shape[0]
+
     mined_loss = []
     for i in range(B):
-        cur_prob = pred_prob[i][gt_before_query.bool()]         # [N], for all anchor box in the frame
-        cur_prob_gt = gt_prob[i][gt_before_query.bool()]        # [N]
-        cur_positive = positive[i][gt_before_query.bool()]      # [N]
-        cur_loss = BCE_loss[i][gt_before_query.bool()]          # [N]
+        cur_prob = pred_prob[i]         # [N], for all anchor box in the frame
+        cur_prob_gt = gt_prob[i]        # [N]
+        cur_positive = positive[i]      # [N]
+        cur_loss = BCE_loss[i]          # [N]
 
         cur_loss_positives = cur_loss[cur_positive.bool()]
         cur_loss_negatives = cur_loss[~cur_positive.bool()]
