@@ -13,6 +13,7 @@ def get_losses_with_anchor(config, preds, gts):
     pred_hw = preds['hw']           # [b,t,N,2], actually half of hw
     pred_bbox = preds['bbox']       # [b,t,N,4]
     pred_prob = preds['prob']       # [b,t,N]
+    anchor = preds['anchor']        # [1,1,N,4]
     if 'prob_refine' in preds.keys():
         pred_prob_refine = preds['prob_refine']     # [b,t]
     if 'giou' in preds.keys():
@@ -30,11 +31,20 @@ def get_losses_with_anchor(config, preds, gts):
     gt_prob = gts['clip_with_bbox']         # [b,t]
     gt_before_query = gts['before_query']   # [b,t]
 
-    assign_label = assign_labels(pred_bbox, gt_bbox, iou_threshold=config.model.positive_threshold)          # [b,t,N]
-    positive = torch.logical_and(gt_prob.unsqueeze(-1).repeat(1,1,N).bool(),
-                                 assign_label.bool())                            # [b,t,N]
-    positive = rearrange(positive, 'b t N -> (b t N)')                           # [b*t*N]
+    # assign labels to anchors
+    if gt_prob.bool().any():
+        assign_label = assign_labels(anchor, gt_bbox, 
+                                    iou_threshold=config.model.positive_threshold,
+                                    topk=config.model.positive_topk)                # [b,t,N]
+        positive = torch.logical_and(gt_prob.unsqueeze(-1).repeat(1,1,N).bool(),
+                                    assign_label.bool())                            # [b,t,N]
+        positive = rearrange(positive, 'b t N -> (b t N)')                           # [b*t*N]
+    else:
+        #print('no positive label')
+        positive = torch.zeros(b,t,N).reshape(-1).bool().to(device)
     loss_mask = positive.float().unsqueeze(1)                                    # [b*t*N,1]
+
+    #print((pred_bbox-anchor).mean().item(), positive.sum().item(), torch.ones_like(positive).sum().item(), gt_prob.unsqueeze(-1).repeat(1,1,N).sum().item())
     
     if torch.sum(positive.float()).item() > 0:
         # bbox center loss
@@ -115,27 +125,34 @@ def get_losses_with_anchor(config, preds, gts):
     return loss, pred_top
 
 
-def get_losses_head(config, refine_prob, gts):
+def get_losses_head(config, refine_prob, gts, preds_top):
     '''
     refine_prob in shape [b,t]
     '''
+    b, t = refine_prob.shape
     gt_prob = gts['clip_with_bbox']         # [b,t]
     gt_before_query = gts['before_query']   # [b,t]
-
+    gt_bbox = gts['clip_bbox']              # [b,t,4]
     gt_prob = gt_prob.reshape(-1)
-    refine_prob = refine_prob.reshape(-1)
     gt_before_query = gt_before_query.reshape(-1)
+    gt_bbox = gt_bbox.reshape(-1,4)
+
+    refine_prob = refine_prob.reshape(-1)
+    pred_bbox = preds_top['bbox'].reshape(-1,4)
+
+    iou, giou, _ = GiouLoss(pred_bbox, gt_bbox)     # [b*t]
+    gt_prob_refine = (iou > config.model.positive_threshold).float()
 
     weight = torch.tensor(config.loss.prob_bce_weight).to(gt_prob.device)
-    weight_ = weight[gt_prob[gt_before_query.bool()].long()]
+    weight_ = weight[gt_prob_refine[gt_before_query.bool()].long()]
     criterion = nn.BCEWithLogitsLoss(reduce=False)
     loss_prob_refine = (criterion(refine_prob[gt_before_query.reshape(-1).bool()], 
-                                      gt_prob[gt_before_query.bool()]) * weight_).mean()
+                                  gt_prob_refine[gt_before_query.bool()]) * weight_).mean()
     loss = {
         'loss_refine_prob': loss_prob_refine,
         'weight_refine_prob': 1.0
     }
-    return loss
+    return loss, gt_prob_refine.reshape(b,t)
 
 
 def get_losses(config, preds, gts):
@@ -194,14 +211,14 @@ def get_losses(config, preds, gts):
     return loss
 
 
-def GiouLoss(bbox_p, bbox_g, mask):
+def GiouLoss(bbox_p, bbox_g, mask=None):
     """
     :param bbox_p: predict of bbox(N,4)(x1,y1,x2,y2)
     :param bbox_g: groundtruth of bbox(N,4)(x1,y1,x2,y2)
     :param mask: ground truth of valid instance, in shape [B]
     :return:
     """
-    device= bbox_p.device
+    device = bbox_p.device
     # for details should go to https://arxiv.org/pdf/1902.09630.pdf
     # ensure predict's bbox form
     x1p = torch.minimum(bbox_p[:, 0], bbox_p[:, 2]).reshape(-1,1)
@@ -235,8 +252,11 @@ def GiouLoss(bbox_p, bbox_g, mask):
 
     # Giou
     giou = iou - (area_c - U) / area_c
-  
-    loss_giou = torch.mean(1.0 - giou[mask])
+    
+    if torch.is_tensor(mask):
+        loss_giou = torch.mean(1.0 - giou[mask])
+    else:
+        loss_giou = torch.mean(1.0 - giou)
     return iou, giou, loss_giou
 
 
@@ -276,6 +296,8 @@ def focal_loss(inputs, targets, alpha=0.25, gamma=2.0):
     alpha = torch.where(targets == 1, 1 - alpha, alpha).to(device)
 
     F_loss = alpha * (1 - pt)**gamma * BCE_loss
+
+    #F_loss = alpha * BCE_loss
 
     return F_loss.mean()
 

@@ -15,7 +15,7 @@ from torch.cuda.amp import autocast as autocast
 
 from config.config import config, update_config
 
-from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
+from model.corr_clip_spatial_transformer2_anchor_3heads import ClipMatcher
 from model.corr_clip_spatial_transformer2_anchor_3heads import Head_prob
 from utils import exp_utils, train_utils, dist_utils
 from dataset import dataset_utils
@@ -81,6 +81,9 @@ def main():
 
     # get model
     model = ClipMatcher(config).to(device)
+    model_cpt = torch.load('/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks/cpt_last.pth.tar', map_location=torch.device('cpu'))
+    model.load_state_dict(model_cpt['state_dict'])
+    del model_cpt
     #model = torch.compile(model)
     head = Head_prob(config).to(device)
 

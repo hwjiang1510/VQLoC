@@ -8,7 +8,9 @@ from dataset import dataset_utils
 from evaluation.test_dataloader import load_query, load_clip, process_inputs
 from einops import rearrange
 from utils import vis_utils
+from utils.loss_utils import GiouLoss
 
+NMS_IOU = 0.5
 
 class Task:
     def __init__(self, config, annots):
@@ -96,6 +98,8 @@ def inference_video(config, model, clip_path, query_frame, visual_crop, save_pat
         idx_start = min(i * batch_num_frames, query_frame-1)
         idx_end = min((i+1) * batch_num_frames, query_frame-1)
         num_frames = idx_end - idx_start
+        if num_frames < batch_num_frames:
+            num_frames += 1
         batch_size_inference = num_frames // clip_num_frames
         if num_frames % clip_num_frames != 0:
             batch_size_inference += 1
@@ -107,6 +111,7 @@ def inference_video(config, model, clip_path, query_frame, visual_crop, save_pat
         if len(frame_idx) < inference_num_frames:
             num_pad = inference_num_frames - len(frame_idx)
             frame_idx.extend([idx_end] * num_pad)   # [N=B*T]
+        #print(query_frame, idx_start, idx_end, num_frames, min(frame_idx), max(frame_idx))
         
         # get current clips
         clips_origin, clips = load_clip(config, clip_reader, frame_idx, clip_path)    # [N,3,H,W]
@@ -132,12 +137,12 @@ def inference_video(config, model, clip_path, query_frame, visual_crop, save_pat
         ret_bboxes.append(preds_top['bbox'])
         ret_scores.append(preds_top['prob'])
 
-        # if device == torch.device("cuda:0") and config.debug:
-        #     vis_utils.vis_pred_clip_inference(clips=clips_origin, 
-        #                             queries=query_raw,
-        #                             pred=preds_top,
-        #                             save_path=save_path,
-        #                             iter_num=i)
+        if config.debug: #and device == torch.device("cuda:0"):
+            vis_utils.vis_pred_clip_inference(clips=clips_origin, 
+                                    queries=query_raw,
+                                    pred=preds_top,
+                                    save_path=save_path,
+                                    iter_num=i)
 
     ret_bboxes = torch.cat(ret_bboxes, dim=0)
     ret_scores = torch.cat(ret_scores, dim=0)
@@ -167,6 +172,8 @@ def get_top_predictions(config, preds, num_frames, oshape):
     pred_hw = torch.gather(pred_hw, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,2)).squeeze()           # [b*t,2]
     pred_center = torch.gather(pred_center, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,2)).squeeze()   # [b*t,2]
 
+    #pred_prob = process_prob(top_idx, pred_prob, preds)    # [b*t]
+
     pred_prob_raw = pred_prob.clone().detach().cpu()
     pred_bbox_raw = pred_bbox.clone().detach().cpu()
     
@@ -182,6 +189,38 @@ def get_top_predictions(config, preds, num_frames, oshape):
         'prob': pred_prob.detach().cpu()
     }
     return preds
+
+
+def process_prob(top_idx, top_prob, preds):
+    '''
+    top_idx in shape [b*t]
+    top_prob in shape [b*t]
+    '''
+    pred_bbox = preds['bbox']       # [b,t,N,4]
+    pred_prob = preds['prob']       # [b,t,N]
+    b,t,N = pred_prob.shape
+
+    pred_prob = rearrange(pred_prob, 'b t N -> (b t) N')        # [b*t,N]
+    pred_bbox = rearrange(pred_bbox, 'b t N c -> (b t) N c')    # [b*t,N,4]
+
+    top_bbox = torch.gather(pred_bbox, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,4)).squeeze()  # [b*t,4]
+    top_bbox = top_bbox.reshape(-1,1,4)     # [b*t,1,4]
+
+    iou = get_iou(top_bbox, pred_bbox)  # [b*t,N]
+
+    mean_prob = []
+    for i in range(b*t):
+        cur_iou = iou[i]    # [N]
+        cur_prob = pred_prob[i]
+        cur_iou_mask = cur_iou > NMS_IOU
+        if cur_iou_mask.sum() > 0:
+            NMS_prob = cur_prob[cur_iou_mask].mean().item()
+        else:
+            NMS_prob = top_prob[i]
+        #print(top_prob[i], cur_iou.mean(), cur_iou_mask.sum(), NMS_prob)
+        mean_prob.append(NMS_prob)
+    mean_prob = torch.tensor(mean_prob)     # [b*t]
+    return mean_prob
 
 
 def process_bbox_prediction(pred_bbox, owidth, oheight, resize_res):
@@ -218,7 +257,20 @@ def process_bbox_prediction(pred_bbox, owidth, oheight, resize_res):
     return pred_bbox
 
 
+def get_iou(top_bbox, pred_bbox):
+    '''
+    top_bbox in shape [b*t,1,4]
+    pred_bbox in shape [b*t,N,4]
+    '''
+    B,N,_ = pred_bbox.shape
 
+    top_bbox_replicate = top_bbox.repeat(1,N,1)     # [b*t,N,4]
+    
+    pred_bbox = pred_bbox.reshape(-1,4)
+    top_bbox_replicate = top_bbox_replicate.reshape(-1,4)
 
+    iou, giou, loss_iou = GiouLoss(pred_bbox, top_bbox_replicate)
+    iou = iou.reshape(B, N)
+    return iou
 
 

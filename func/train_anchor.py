@@ -30,7 +30,7 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
         iter_num = batch_idx + len(loader) * epoch
 
         sample = exp_utils.dict_to_cuda(sample)
-        sample = dataset_utils.process_data(config, sample, split='train', device=device)     # normalize and data augmentations on GPU
+        sample = dataset_utils.process_data(config, sample, iter=iter_num, split='train', device=device)     # normalize and data augmentations on GPU
         time_meters.add_loss_value('Data time', time.time() - batch_end)
         end = time.time()
 
@@ -80,6 +80,12 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
                                     iter_num=iter_num,
                                     output_dir=output_dir,
                                     subfolder='train')
+            vis_utils.vis_pred_scores(sample=sample,
+                                    pred=preds_top,
+                                    iter_num=iter_num,
+                                    output_dir=output_dir,
+                                    subfolder='train')
+
         batch_end = time.time()
 
         if rank == 0:
@@ -91,7 +97,7 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
             wandb_run.log(wandb_log)
         
         dist.barrier()
-        if batch_idx == 2:
+        if batch_idx < 3:
             torch.cuda.empty_cache()
 
 
@@ -124,6 +130,11 @@ def validate(config, loader, model, epoch, output_dir, device, rank, wandb_run=N
 
             if rank == 0: #batch_idx % config.eval_vis_freq == 0 and rank == 0:
                 vis_utils.vis_pred_clip(sample=sample,
+                                        pred=preds_top,
+                                        iter_num=batch_idx,
+                                        output_dir=output_dir,
+                                        subfolder='val')
+                vis_utils.vis_pred_scores(sample=sample,
                                         pred=preds_top,
                                         iter_num=batch_idx,
                                         output_dir=output_dir,

@@ -16,11 +16,11 @@ from torch.cuda.amp import autocast as autocast
 from config.config import config, update_config
 
 ## from model.corr_clip_spatial_transformer2_anchor import ClipMatcher
-from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
+from model.minotaur import Minotaur
 #from model.corr_clip_spatial_transformer2_anchor_3heads import ClipMatcher
 from utils import exp_utils, train_utils, dist_utils
 from dataset import dataset_utils
-from func.train_anchor import train_epoch, validate
+from func.train_minotaur import train_epoch, validate
 
 import transformers
 import wandb
@@ -81,7 +81,7 @@ def main():
         wandb_run = None
 
     # get model
-    model = ClipMatcher(config).to(device)
+    model = Minotaur(config).to(device)
     #model = torch.compile(model)
 
     # get optimizer

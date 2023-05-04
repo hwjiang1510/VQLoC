@@ -8,6 +8,7 @@ from dataset import dataset_utils
 import torch
 import torch.nn.functional as F
 from einops import rearrange
+import numpy as np
 
 
 def vis_pred_clip(sample, pred, iter_num, output_dir, subfolder='train'):
@@ -62,7 +63,39 @@ def vis_pred_clip(sample, pred, iter_num, output_dir, subfolder='train'):
             plt.close()
             frames.append(cv2.imread(os.path.join(output_dir, 'tmp.png'))[...,::-1])
         save_name = os.path.join(output_dir, '{}_{}.gif'.format(iter_num, i))
-        imageio.mimsave(save_name, frames, 'GIF', duration=0.2)  
+        imageio.mimsave(save_name, frames, 'GIF', duration=0.2)
+
+
+def vis_pred_scores(sample, pred, iter_num, output_dir, subfolder='train'):
+    output_dir = os.path.join(output_dir, 'visualization', subfolder)
+    os.makedirs(output_dir, exist_ok=True)
+
+    prob = sample['clip_with_bbox'].detach().cpu()     # [B,T]
+    prob_pred = pred['prob'].detach().cpu()            # [B,T]
+    if 'gt_iou' in pred.keys():
+        prob_iou = pred['gt_iou'].detach().cpu()            # [B,T]
+    if 'prob_refine' in pred.keys():
+        prob_refine = pred['prob_refine'].detach().cpu()            # [B,T]
+    B, T = prob.shape
+
+    for i in range(B):
+        cur_prob, cur_prob_pred = prob[i].numpy(), torch.sigmoid(prob_pred[i]).numpy()     # [T]
+        x = np.arange(T)
+        plt.plot(x, cur_prob_pred, marker=None, color='b', label='pred')
+        plt.plot(x, cur_prob, marker=None, color='r', label='gt')
+        if 'prob_refine' in pred.keys():
+            cur_prob_refine = torch.sigmoid(prob_refine[i]).numpy()
+            plt.plot(x, cur_prob_refine, marker=None, color='g', label='pred')
+        if 'gt_iou' in pred.keys():
+            cur_prob_iou = prob_iou[i].numpy() * 0.9
+            plt.plot(x, cur_prob_iou, marker=None, color='c', label='pred')
+        plt.xlabel('number of frames')
+        plt.ylabel('occurance score')
+        plt.ylim((0.0, 1.05))
+        plt.legend(loc='best')
+        save_name = os.path.join(output_dir, '{}_{}.jpg'.format(iter_num, i))
+        plt.savefig(save_name)
+        plt.close()
 
 
 def vis_pred_clip_inference(clips, queries, pred, save_path, iter_num):

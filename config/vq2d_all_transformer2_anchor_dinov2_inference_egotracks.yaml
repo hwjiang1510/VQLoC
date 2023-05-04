@@ -42,7 +42,8 @@ model:
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks/cpt_last.pth.tar'
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_longer/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_frame60/cpt_last.pth.tar'
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_neg/cpt_last.pth.tar'
-  cpt_path: ''
+  cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_fix-assign-res8-no-process/cpt_last.pth.tar'
+  #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_fix-assign-res16-no-process/cpt_last.pth.tar'
 
 # loss config
 loss:

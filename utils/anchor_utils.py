@@ -1,4 +1,5 @@
 import torch
+from einops import rearrange
 
 
 def generate_anchor_boxes_on_regions(image_size, 
@@ -95,28 +96,32 @@ def generate_anchor_boxes(base_sizes, aspect_ratios, dtype=torch.float32, device
 #     return labels
 
 
-def assign_labels(proposals, gt_boxes, iou_threshold=0.5):
+def assign_labels(anchors, gt_boxes, iou_threshold=0.5, topk=5):
     """
     Assign labels to a set of bounding box proposals based on their IoU with ground truth boxes.
 
     Arguments:
-    proposals -- torch.Tensor of shape [B,T,N,4], representing the bounding box proposals for each frame in each clip
+    anchors -- torch.Tensor of shape [1,1,N,4], representing the bounding box proposals for each frame in each clip
     gt_boxes -- torch.Tensor of shape [B,T,4], representing the ground truth boxes for each frame in each clip
     iou_threshold -- float, the IoU threshold for a proposal to be considered a positive match with a ground truth box
 
     Returns:
     labels -- torch.Tensor of shape [B,T,N], containing the assigned labels for each proposal (0 for background, 1 for object)
     """
+    anchors = anchors.detach()
+    gt_boxes = gt_boxes.detach()
+
+    b,t = gt_boxes.shape[:2]
+    anchors = anchors.repeat(b,t,1,1)     #[B,T,N,4]
 
     # Calculate the IoU between each proposal and the ground truth box
-    iou = calculate_iou(proposals.view(-1, proposals.shape[-2], proposals.shape[-1]),   # [B*T,N,4]
-                        gt_boxes.view(-1, gt_boxes.shape[-1]))                          # [B*T,4] -> [B*T,N]
+    iou = calculate_iou(anchors.view(-1, anchors.shape[-2], anchors.shape[-1]),   # [B*T,N,4]
+                        gt_boxes.view(-1, gt_boxes.shape[-1]))                    # [B*T,4] -> [B*T,N]
+    iou = iou.view(anchors.shape[:-1])    # [B,T,N]
 
     # Assign labels to the proposals based on their IoU with the ground truth box
     labels = iou > iou_threshold
-
-    # Reshape the labels tensor to match the shape of the input proposals tensor
-    labels = labels.view(proposals.shape[:-1])
+    #labels = process_labels(labels, iou, topk)
 
     return labels
 
@@ -160,3 +165,30 @@ def calculate_iou(boxes1, boxes2):
     iou = intersection_area / union_area
 
     return iou
+
+
+def process_labels(labels, iou, topk=5):
+    '''
+    labels: in shape [B,T,N], bool
+    iou: in shape [B,T,N]
+    '''
+    B,T,N = labels.shape
+
+    labels  = rearrange(labels, 'b t n -> (b t) n')
+    labels_cp = labels.clone()
+    iou  = rearrange(iou, 'b t n -> (b t) n')
+
+    pos_mask = labels.any(dim=1)
+
+    for i in range(labels.shape[0]):
+            cur_iou = iou[i] > 0.1
+            if cur_iou.float().sum().item() > topk:
+                _, topk_indices = torch.topk(iou[i], k=topk, dim=0)
+            else:
+                topk_indices = torch.where(cur_iou.float() > 0)
+            labels_cp[i][topk_indices] = True
+    
+    labels = torch.logical_or(labels, labels_cp)
+    
+    labels = rearrange(labels, '(b t) n -> b t n', b=B, t=T)
+    return labels

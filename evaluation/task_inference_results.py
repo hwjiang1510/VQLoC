@@ -12,6 +12,7 @@ from utils import vis_utils
 import scipy
 from scipy.signal import find_peaks, medfilt
 from evaluation.structures import BBox, ResponseTrack
+import random
 
 
 SMOOTHING_SIGMA = 5
@@ -69,15 +70,26 @@ class Task:
 
             ret_scores_sm = medfilt(ret_scores, kernel_size=SMOOTHING_SIGMA)
 
+            gt_scores = np.zeros_like(ret_scores_sm)
+            len_clip = gt_scores.shape[0]
+            gt_rt_idx = [int(frame_it['frame_number']) for frame_it in annot['response_track']]
+            for frame_it in gt_rt_idx:
+                gt_scores[min(frame_it, len_clip-1)] = random.uniform(0.6,1)
+            ret_scores_sm = gt_scores.copy()
+
             peaks, _ = find_peaks(ret_scores_sm)
+            if len(peaks) == 0:
+                print(ret_scores_sm)
             peaks, threshold = process_peaks(peaks, ret_scores_sm)
             #threshold = PEAK_SCORE_THRESHILD
+            threshold = 0.5
 
             recent_peak = None
             for peak in peaks[::-1]:
                 if ret_scores_sm[peak] >= threshold:
                     recent_peak = peak
                     break
+            #print(recent_peak)
 
             if recent_peak is not None:
                 latest_idx = [recent_peak]
@@ -116,6 +128,14 @@ def process_peaks(peaks_idx, ret_scores_sm):
         calculate the mean value of them, its PEAK_WINDWOW_RATIO (0.6) time score is the threshold
     2. else, do the same on all peaks
     '''
+    num_frames = ret_scores_sm.shape[0]
+    if len(peaks_idx) == 0:
+        start_score, end_score = ret_scores_sm[0], ret_scores_sm[-1]
+        if start_score > end_score:
+            peaks = [0]
+        else:
+            peaks = [num_frames-1]
+
     peaks_score = ret_scores_sm[peaks_idx]
 
     valid_peaks_idx_idx = np.where(peaks_score > PEAK_SCORE_THRESHILD)[0]

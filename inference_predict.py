@@ -64,8 +64,8 @@ def perform_vq2d_inference(annotations, config):
     results_queue = mp.Queue()
 
     num_processes = num_gpus
-    if config.debug:
-        num_processes = 1
+    # if config.debug:
+    #     num_processes = 1
 
     pbar = tqdm.tqdm(
         desc=f"Computing VQ2D predictions",

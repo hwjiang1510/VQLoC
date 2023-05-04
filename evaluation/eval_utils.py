@@ -1,6 +1,6 @@
 import warnings
 import numpy as np
-
+from utils.loss_utils import GiouLoss
 
 def convert_annotations_to_clipwise_list(annotations):
     clipwise_annotations_list = {}
@@ -61,4 +61,3 @@ def format_predictions(annotations, predicted_rts):
             video_predictions["clips"].append(clip_predictions)
         predictions["results"]["videos"].append(video_predictions)
     return predictions
-

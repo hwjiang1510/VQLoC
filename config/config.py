@@ -33,6 +33,7 @@ config.dataset.clip_reader_val = 'decord_balance'
 config.dataset.frame_interval = 5
 config.dataset.query_padding = False
 config.dataset.query_square = False
+config.dataset.padding_value = 'zero'
 
 # model config
 config.model = edict()
@@ -43,9 +44,11 @@ config.model.fix_backbone = True
 config.model.num_transformer = 2
 config.model.type_transformer = 'global'
 config.model.resolution_transformer = 1
+config.model.resolution_anchor_feat = 1
 config.model.pe_transformer = 'sinusoidal'
 config.model.window_transformer = 10
 config.model.positive_threshold = 0.2
+config.model.positive_topk = 5
 config.model.cpt_path = ''
 
 # loss config
@@ -72,6 +75,7 @@ config.train.grad_max = 20.0
 config.train.accumulation_step = 1
 config.train.aug_clip = True
 config.train.aug_query = True
+config.train.aug_clip_iter = 10000
 config.train.aug_brightness = 0.2
 config.train.aug_contrast = 0.2
 config.train.aug_saturation = 0.2

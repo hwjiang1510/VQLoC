@@ -21,6 +21,10 @@ split_files = {
             'test': 'vq_test_unannotated.json'
         }
 
+NORMALIZE_MEAN = [int(it*255) for it in [0.485, 0.456, 0.406]]
+NORMALIZE_STD = [int(it*255) for it in [0.229, 0.224, 0.225]]
+
+
 class QueryVideoDataset(Dataset):
     def __init__(self,
                  dataset_name,
@@ -37,6 +41,11 @@ class QueryVideoDataset(Dataset):
         self.dataset_name = dataset_name
         self.query_params = query_params
         self.clip_params = clip_params
+
+        if self.clip_params['padding_value'] == 'zero':
+            self.padding_value = 0
+        elif self.clip_params['padding_value'] == 'mean':
+            self.padding_value = 0.5 #tuple(NORMALIZE_MEAN)
         
         self.data_dir = data_dir
         self.clip_dir = clip_dir
@@ -258,7 +267,8 @@ class QueryVideoDataset(Dataset):
             pad_input = [pad_size, 0] * 2
             clip_bbox[:,1] += (max_size - min_size) / 2.0
             clip_bbox[:,3] += (max_size - min_size) / 2.0
-        transform_pad = transforms.Pad(pad_input)
+        
+        transform_pad = transforms.Pad(pad_input, fill=self.padding_value)
         clip = transform_pad(clip)        # square image
         h_pad, w_pad = clip.shape[-2:]
         clip = F.interpolate(clip, size=(target_size, target_size), mode='bilinear')#.squeeze(0)

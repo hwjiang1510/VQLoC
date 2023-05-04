@@ -40,6 +40,7 @@ def get_dataset(config, split='train'):
         'clip_num_frames': clip_num_frames,
         'sampling': config.dataset.clip_sampling,
         'frame_interval': config.dataset.frame_interval,
+        'padding_value': config.dataset.padding_value
     }
 
     if dataset_name == 'ego4d_vq2d':
@@ -61,7 +62,7 @@ def get_dataset(config, split='train'):
     return dataset
 
 
-def process_data(config, sample, split='train', device='cuda'):
+def process_data(config, sample, iter=0, split='train', device='cuda'):
     '''
     sample: 
         'clip': clip,                           # [B,T,3,H,W]
@@ -121,7 +122,7 @@ def process_data(config, sample, split='train', device='cuda'):
     clip_bbox = bbox_torchTocv2(clip_bbox)          # [B,T,4], with range in image pixels, cv2 axis
 
     # augment clips
-    if split == 'train' and config.train.aug_clip:        
+    if split == 'train' and config.train.aug_clip and (iter > config.train.aug_clip_iter):        
         clip_aug, clip_bbox_aug  = [], []
         for clip_cur, clip_bbox_cur in zip(clip, clip_bbox):    # [T,C,H,W], [T,4,2]
             clip_cur_aug, clip_bbox_cur_aug = transform_clip(clip_cur.to(device), clip_bbox_cur.to(device).unsqueeze(1))
@@ -244,6 +245,18 @@ def check_bbox(bbox, h, w):
     return bbox_clip.reshape(B,T,4), valid.reshape(B,T)
 
 
+def check_bbox_permute(bbox_p):
+    '''
+    bbox_p: [N,4], (x1,y1,x2,y2)
+    '''
+    x1p = torch.minimum(bbox_p[:, 0], bbox_p[:, 2]).reshape(-1,1)
+    x2p = torch.maximum(bbox_p[:, 0], bbox_p[:, 2]).reshape(-1,1)
+    y1p = torch.minimum(bbox_p[:, 1], bbox_p[:, 3]).reshape(-1,1)
+    y2p = torch.maximum(bbox_p[:, 1], bbox_p[:, 3]).reshape(-1,1)
+    bbox_p = torch.cat([x1p, y1p, x2p, y2p], axis=1)
+    return bbox_p
+
+
 def bbox_xyxyTopoints(bbox):
     '''
     bbox: torch.Tensor, in shape [..., 4]
@@ -305,3 +318,17 @@ def create_square_bbox(bbox, img_h, img_w):
 
     new_bbox = torch.tensor([new_x1, new_y1, new_x2, new_y2])
     return new_bbox
+
+
+def bbox_xyhwToxyxy(bbox_xyhw):
+    '''
+    bbox_xyhw in shape [..., 4]
+    height and width of bbox is the full height and width
+    '''
+    bbox_center = bbox_xyhw[..., :2]
+    bbox_hw = bbox_xyhw[..., 2:]
+    bbox_hw_half = 0.5 * bbox_hw
+
+    bbox_xyxy = torch.cat([bbox_center - bbox_hw_half, bbox_center + bbox_hw_half], dim=-1)
+    return bbox_xyxy
+

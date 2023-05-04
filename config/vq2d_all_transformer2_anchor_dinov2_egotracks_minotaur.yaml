@@ -1,4 +1,4 @@
-exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_headroi'
+exp_name: 'minotaur_egotracks'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
@@ -47,7 +47,7 @@ loss:
 
 # training config
 train:
-  resume: False
+  resume: True
   batch_size: 4
   total_iteration: 60000
   lr: 0.0001

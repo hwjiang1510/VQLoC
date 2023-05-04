@@ -33,6 +33,9 @@ class Minotaur(nn.Module):
             nn.Conv2d(256, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(inplace=True),
+            nn.Conv2d(256, 256, 3, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(inplace=True),
         )
 
         self.transformer_encoder = []
@@ -49,17 +52,18 @@ class Minotaur(nn.Module):
         self.transformer_encoder = nn.ModuleList(self.transformer_encoder)
         
         self.embedding = torch.zeros(config.dataset.clip_num_frames, 256).unsqueeze(0)  # [1,T,256]
+        self.embedding = nn.parameter.Parameter(self.embedding)
 
         self.transformer_decoder = []
         for i in range(6):
-            self.transformer_decoder.append(TubeDetrLayer(config))
+            self.transformer_decoder.append(TubeDetrLayer(config, dim=256))
         self.transformer_decoder = nn.ModuleList(self.transformer_decoder)
 
         self.MLP = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.BatchNorm1d(256),
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
             nn.LeakyReLU(inplace=True),
-            nn.Linear(256, 5)
+            nn.Linear(128, 5)
         )
         self.MLP.apply(self.init_weights_linear)
 
@@ -108,11 +112,11 @@ class Minotaur(nn.Module):
         else:
             query_feat = self.extract_feature(query)        # [b c h w]
             clip_feat = self.extract_feature(clip)          # (b t) c h w
-        h, w = clip_feat.shape[-2:]
 
         all_feat = torch.cat([query_feat, clip_feat], dim=0)
         all_feat = self.reduce(all_feat)
         query_feat, clip_feat = all_feat.split([b, b*t], dim=0)
+        h, w = clip_feat.shape[-2:]
         
         query_feat = rearrange(query_feat.unsqueeze(1).repeat(1,t,1,1,1), 'b t c h w -> (b t) (h w) c')  # [b*t,n,c]
         clip_feat = rearrange(clip_feat, 'b c h w -> b (h w) c')                                         # [b*t,n,c]
@@ -137,20 +141,20 @@ class Minotaur(nn.Module):
             'center': center,
             'hw': hw,
             'bbox': bbox,
-            'prob': prob.squeeze(-1)
+            'prob': prob.squeeze(-1)    # [b,t]
         }
         return result
 
 
 
 class TubeDetrLayer(nn.Module):
-    def __init__(self, config, dim) -> None:
+    def __init__(self, config, dim=256):
         super().__init__()
 
         self.config = config
         self.dim = dim
 
-        self.attention = Attention(dim=dim, head=4)
+        self.attention = Attention(dim=dim, num_heads=4)
 
         self.mask = None
         self.transformer_deocoder_layer = torch.nn.TransformerDecoderLayer(
@@ -166,9 +170,7 @@ class TubeDetrLayer(nn.Module):
         embedding in [B,T,C]
         feat in [B,T*N,C]
         '''
-        b,t,n,c = feat.shape
-
-        embedding = embedding + self.attention(embedding)
+        embedding = embedding + self.attention(embedding, embedding, embedding)
 
         mask = self.get_mask(embedding, feat)
         embedding = self.transformer_deocoder_layer(embedding, feat, memory_mask=mask)
@@ -179,7 +181,7 @@ class TubeDetrLayer(nn.Module):
         if not torch.is_tensor(self.mask):
             t = embedding.shape[1]
             tn = feat.shape[1]
-            n = tn // n
+            n = tn // t
             mask = torch.ones(t, tn).float() * float('-inf')
 
             for i in range(t):

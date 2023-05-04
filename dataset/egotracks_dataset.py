@@ -14,6 +14,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from dataset import dataset_utils
 from dataset.base_dataset import QueryVideoDataset, read_frames_decord_balance, get_bbox_from_data, get_video_len
+from dataset.base_dataset import NORMALIZE_MEAN, NORMALIZE_STD
 
 split_files = {
             'train': 'egotracks_train.json',
@@ -37,6 +38,11 @@ class EgoTracksDataset(QueryVideoDataset):
         self.dataset_name = dataset_name
         self.query_params = query_params
         self.clip_params = clip_params
+
+        if self.clip_params['padding_value'] == 'zero':
+            self.padding_value = 0
+        elif self.clip_params['padding_value'] == 'mean':
+            self.padding_value = 0.5 #tuple(NORMALIZE_MEAN)
         
         self.data_dir = data_dir
         self.clip_dir = clip_dir

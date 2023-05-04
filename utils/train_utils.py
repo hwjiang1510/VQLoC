@@ -9,11 +9,19 @@ def get_optimizer(config, model):
     if config.model.fix_backbone:
         for param in model.backbone.parameters():
             param.requires_grad = False
-    
-    params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = torch.optim.AdamW(params,
+        params = filter(lambda p: p.requires_grad, model.parameters())
+        optimizer = torch.optim.AdamW(params,
                                 lr=config.train.lr,
                                 weight_decay=config.train.weight_decay)
+    else:
+        backbone_param = list(filter(lambda kv: 'backbone' in kv[0], model.named_parameters()))
+        other_param = list(filter(lambda kv: 'backbone' not in kv[0], model.named_parameters()))
+        backbone_param = list(map(lambda x: x[1], backbone_param))
+        other_param = list(map(lambda x: x[1], other_param))
+        optimizer = torch.optim.AdamW([{'params': backbone_param, 'lr': config.train.lr},
+                                       {'params': other_param, 'lr': config.train.lr}],
+                                       lr=config.train.lr,
+                                       weight_decay=config.train.weight_decay)
     return optimizer
 
 

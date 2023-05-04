@@ -122,6 +122,8 @@ def parse_args():
         "--eval", dest="eval", action="store_true",help="evaluate model")
     parser.add_argument(
         "--debug", dest="debug", action="store_true",help="evaluate model")
+    parser.add_argument(
+        "--gt-fg", dest="gt_fg", action="store_true",help="evaluate model")
     args, rest = parser.parse_known_args()
     update_config(args.cfg)
     return args

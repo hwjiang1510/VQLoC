@@ -72,6 +72,11 @@ def load_clip(config, clip_reader, frame_idx, clip_path):
     frame_idx: list of N elements of index
     return: loaded video frames in shape [N,3,h,w]
     '''
+    if config.dataset.padding_value == 'zero':
+        pad_value = 0
+    elif config.dataset.padding_value == 'mean':
+        pad_value = 0.5
+
     clips = clip_reader.get_batch(frame_idx)
     clips = clips.float() / 255
     clips = clips.permute(0, 3, 1, 2)     # [N,3,h,w]
@@ -87,7 +92,7 @@ def load_clip(config, clip_reader, frame_idx, clip_path):
         pad_input = [0, pad_size] * 2                   # for the left, top, right and bottom borders respectively
     else:
         pad_input = [pad_size, 0] * 2
-    transform_pad = transforms.Pad(pad_input)
+    transform_pad = transforms.Pad(pad_input, pad_value)
     clips = transform_pad(clips)        # square image
     h_pad, w_pad = clips.shape[-2:]
     clips = F.interpolate(clips, size=(target_size, target_size), mode='bilinear')

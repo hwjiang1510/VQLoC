@@ -1,4 +1,4 @@
-exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_headroi'
+exp_name: 'default-arch_aug-no_anchor_focal-w10_3heads_dropout0.2_positive0.3_egotracks_all'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
@@ -28,7 +28,7 @@ model:
   backbone_name: 'dinov2'
   backbone_type: 'vitb14'
   bakcbone_use_mae_weight: False
-  fix_backbone: True
+  fix_backbone: False
   num_transformer: 3
   type_transformer: 'global'
   resolution_transformer: 8
@@ -47,8 +47,8 @@ loss:
 
 # training config
 train:
-  resume: False
-  batch_size: 4
+  resume: True
+  batch_size: 1
   total_iteration: 60000
   lr: 0.0001
   weight_decay: 0.005
@@ -77,5 +77,5 @@ train:
 
 # test config
 test:
-  batch_size: 4
+  batch_size: 1
   compute_metric: True

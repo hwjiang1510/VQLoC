@@ -6,6 +6,7 @@ from model.transformer import Block
 from utils.model_utils import PositionalEncoding1D, positionalencoding1d, positionalencoding3d, positionalencoding2d
 from utils.model_utils import BasicBlock_Conv2D, BasicBlock_MLP
 from utils.anchor_utils import generate_anchor_boxes_on_regions
+from dataset.dataset_utils import bbox_xyhwToxyxy
 from einops import rearrange
 import math
 
@@ -52,10 +53,12 @@ class ClipMatcher(nn.Module):
         assert self.type_transformer in ['local', 'global']
         self.window_transformer = config.model.window_transformer
         self.resolution_transformer = config.model.resolution_transformer
+        self.resolution_anchor_feat = config.model.resolution_anchor_feat
 
-        self.anchors = generate_anchor_boxes_on_regions(image_size=[self.clip_size_coarse, self.clip_size_coarse],
-                                                        num_regions=[self.resolution_transformer, self.resolution_transformer])
-        self.anchors = self.anchors.unsqueeze(0) / self.clip_size_coarse   # [1,R^2*N*M,4], value range [0,1], represented by [c_x,c_y,h,w] in torch axis
+        self.anchors_xyhw = generate_anchor_boxes_on_regions(image_size=[self.clip_size_coarse, self.clip_size_coarse],
+                                                        num_regions=[self.resolution_anchor_feat, self.resolution_anchor_feat])
+        self.anchors_xyhw = self.anchors_xyhw / self.clip_size_coarse   # [R^2*N*M,4], value range [0,1], represented by [c_x,c_y,h,w] in torch axis
+        self.anchors_xyxy = bbox_xyhwToxyxy(self.anchors_xyhw)
 
         # query down heads
         self.query_down_heads = []
@@ -131,7 +134,7 @@ class ClipMatcher(nn.Module):
         self.temporal_mask = None
 
         # output head
-        self.head = Head(in_dim=256)
+        self.head = Head(in_dim=256, in_res=self.resolution_transformer, out_res=self.resolution_anchor_feat)
 
     def init_weights_linear(self, m):
         if type(m) == nn.Linear:
@@ -178,17 +181,19 @@ class ClipMatcher(nn.Module):
             clip_feat = self.extract_feature(clip)          # (b t) c h w
         h, w = clip_feat.shape[-2:]
 
+        # reduce channel size
         all_feat = torch.cat([query_feat, clip_feat], dim=0)
         all_feat = self.reduce(all_feat)
         query_feat, clip_feat = all_feat.split([b, b*t], dim=0)
         
+        # find spatial correspondence
         query_feat = rearrange(query_feat.unsqueeze(1).repeat(1,t,1,1,1), 'b t c h w -> (b t) (h w) c')  # [b*t,n,c]
         clip_feat = rearrange(clip_feat, 'b c h w -> b (h w) c')                                         # [b*t,n,c]
         for layer in self.CQ_corr_transformer:
             clip_feat = layer(clip_feat, query_feat)                                                     # [b*t,n,c]
-        
         clip_feat = rearrange(clip_feat, 'b (h w) c -> b c h w', h=h, w=w)                               # [b*t,c,h,w]
 
+        # down-size features and find temporal correspondence
         for head in self.down_heads:
             clip_feat = head(clip_feat)
             if list(clip_feat.shape[-2:]) == [self.resolution_transformer]*2:
@@ -199,10 +204,17 @@ class ClipMatcher(nn.Module):
                 clip_feat = rearrange(clip_feat, 'b (t h w) c -> (b t) c h w', b=b, t=t, h=self.resolution_transformer, w=self.resolution_transformer)
                 break
         
+        # refine anchors
+        anchors_xyhw = self.anchors_xyhw.to(clip_feat.device)                   # [N,4]
+        anchors_xyxy = self.anchors_xyxy.to(clip_feat.device)                   # [N,4]
+        anchors_xyhw = anchors_xyhw.reshape(1,1,-1,4)                           # [1,1,N,4]
+        anchors_xyxy = anchors_xyxy.reshape(1,1,-1,4)                           # [1,1,N,4]
+        
         bbox_refine, prob = self.head(clip_feat)                                # [b*t,N=h*w*n*m,c]
-        bbox_refine = rearrange(bbox_refine, '(b t) N c -> b t N c', b=b, t=t)  # [b,t,N,4]
+        bbox_refine = rearrange(bbox_refine, '(b t) N c -> b t N c', b=b, t=t)  # [b,t,N,4], in xyhw frormulation
         prob = rearrange(prob, '(b t) N c -> b t N c', b=b, t=t)                # [b,t,N,1]
-        bbox_refine += self.anchors.to(bbox_refine.device)
+        bbox_refine += anchors_xyhw                                             # [b,t,N,4]
+
         center, hw = bbox_refine.split([2,2], dim=-1)                           # represented by [c_x, c_y, h, w]
         hw = 0.5 * hw                                                           # anchor's hw is defined as real hw
         bbox = torch.cat([center - hw, center + hw], dim=-1)                    # [b,t,N,4]
@@ -211,7 +223,8 @@ class ClipMatcher(nn.Module):
             'center': center,           # [b,t,N,2]
             'hw': hw,                   # [b,t,N,2]
             'bbox': bbox,               # [b,t,N,4]
-            'prob': prob.squeeze(-1)    # [b,t,N]
+            'prob': prob.squeeze(-1),   # [b,t,N]
+            'anchor': anchors_xyxy      # [1,1,N,4]
         }
         return result
     
@@ -235,13 +248,20 @@ class ClipMatcher(nn.Module):
 
 
 class Head(nn.Module):
-    def __init__(self, in_dim=256, n=n_base_sizes, m=n_aspect_ratios):
+    def __init__(self, in_dim=256, in_res=8, out_res=16, n=n_base_sizes, m=n_aspect_ratios):
         super(Head, self).__init__()
 
         self.in_dim = in_dim
         self.n = n
         self.m = m
+        self.num_up_layers = int(math.log2(out_res // in_res))
         self.num_layers = 3
+        
+        if self.num_up_layers > 0:
+            self.up_convs = []
+            for _ in range(self.num_up_layers):
+                self.up_convs.append(torch.nn.ConvTranspose2d(in_dim, in_dim, kernel_size=4, stride=2, padding=1))
+            self.up_convs = nn.Sequential(*self.up_convs)
 
         self.in_conv = BasicBlock_Conv2D(in_dim=in_dim, out_dim=2*in_dim)
 
@@ -271,8 +291,11 @@ class Head(nn.Module):
 
     def forward(self, x):
         '''
-        x in shape [B, c, h, w]
+        x in shape [B,c,h=8,w=8]
         '''
+        if self.num_up_layers > 0:
+            x = self.up_convs(x)     # [B,c,h=16,w=16]
+
         B, c, h, w = x.shape
 
         feat_reg, feat_cls = self.in_conv(x).split([c, c], dim=1)   # both [B,c,h,w]

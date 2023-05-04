@@ -8,6 +8,8 @@ from utils.model_utils import BasicBlock_Conv2D, BasicBlock_MLP
 from utils.anchor_utils import generate_anchor_boxes_on_regions
 from einops import rearrange
 import math
+import torchvision
+from dataset import dataset_utils
 
 
 base_sizes=torch.tensor([[16, 16], [32, 32], [64, 64], [128, 128]], dtype=torch.float32)    # 4 types of size
@@ -133,12 +135,6 @@ class ClipMatcher(nn.Module):
         # output head
         self.head = Head(in_dim=256)
 
-        # probability refinement head
-        self.head_prob = Head_prob(config=config,
-                                   h=self.resolution_transformer, 
-                                   w=self.resolution_transformer,
-                                   dim=n_aspect_ratios*n_base_sizes)
-
     def init_weights_linear(self, m):
         if type(m) == nn.Linear:
             #nn.init.xavier_uniform_(m.weight)
@@ -166,7 +162,7 @@ class ClipMatcher(nn.Module):
                 return out, h, w
             return out
 
-    def forward(self, clip, query, fix_backbone=True):
+    def forward(self, clip, query, fix_backbone=True, return_features=False):
         '''
         clip: in shape [b,t,c,h,w]
         query: in shape [b,c,h2,w2]
@@ -187,9 +183,13 @@ class ClipMatcher(nn.Module):
         all_feat = torch.cat([query_feat, clip_feat], dim=0)
         all_feat = self.reduce(all_feat)
         query_feat, clip_feat = all_feat.split([b, b*t], dim=0)
+        if return_features:
+            query_feat_cp = query_feat.clone().detach().cpu()
+            clip_feat_cp = clip_feat.clone().detach().cpu()
         
         query_feat = rearrange(query_feat.unsqueeze(1).repeat(1,t,1,1,1), 'b t c h w -> (b t) (h w) c')  # [b*t,n,c]
         clip_feat = rearrange(clip_feat, 'b c h w -> b (h w) c')                                         # [b*t,n,c]
+        
         for layer in self.CQ_corr_transformer:
             clip_feat = layer(clip_feat, query_feat)                                                     # [b*t,n,c]
         
@@ -212,17 +212,17 @@ class ClipMatcher(nn.Module):
         center, hw = bbox_refine.split([2,2], dim=-1)                           # represented by [c_x, c_y, h, w]
         hw = 0.5 * hw                                                           # anchor's hw is defined as real hw
         bbox = torch.cat([center - hw, center + hw], dim=-1)                    # [b,t,N,4]
-        
-        prob_refine = self.head_prob(prob)                                # [b,t]
 
         result = {
             'center': center,           # [b,t,N,2]
             'hw': hw,                   # [b,t,N,2]
             'bbox': bbox,               # [b,t,N,4]
-            'prob': prob.squeeze(-1),   # [b,t,N]
-            'prob_refine': prob_refine  # [b,t]
+            'prob': prob.squeeze(-1)    # [b,t,N]
         }
-        return result
+        if return_features:
+            return result, clip_feat_cp, query_feat_cp
+        else:
+            return result
     
 
     def get_mask(self, src, t):
@@ -273,8 +273,6 @@ class Head(nn.Module):
         self.regression_head.apply(self.init_weights_conv)
         self.classification_head.apply(self.init_weights_conv)
 
-
-
     def init_weights_conv(self, m):
         if type(m) == nn.Conv2d:
             nn.init.normal_(m.weight, mean=0.0, std=1e-6)
@@ -306,42 +304,42 @@ class Head(nn.Module):
 
 
 class Head_prob(nn.Module):
-    def __init__(self, config, h=8, w=8, dim=n_base_sizes*n_aspect_ratios):
+    def __init__(self, config):
         super(Head_prob, self).__init__()
 
-        self.dim = dim
-        self.h = h
-        self.w = w
+        self.dim = 256
+        self.h = 8
+        self.w = 8
+        self.output_size = (self.h, self.w)
         self.config = config
         self.window_transformer = config.model.window_transformer
 
-        # spatial-temporal PE
-        pe_3d = torch.zeros(1, config.dataset.clip_num_frames*h*w, self.dim)
-        self.pe_3d = nn.parameter.Parameter(pe_3d)
-
-        # feature transformer
-        self.temporal_mask = None
-        self.feat_corr_transformer = []
-        self.num_transformer = 1
-        for _ in range(self.num_transformer):
-            self.feat_corr_transformer.append(
-                    torch.nn.TransformerEncoderLayer(
-                        d_model=self.dim, 
-                        nhead=1,
-                        dim_feedforward=int(4 * self.dim),
-                        dropout=0.0,
-                        activation='gelu',
-                        batch_first=True
-                ))
-        self.feat_corr_transformer = nn.ModuleList(self.feat_corr_transformer)
+        # clip-query correspondence
+        self.transformer = []
+        for _ in range(1):
+            self.transformer.append(
+                torch.nn.TransformerDecoderLayer(
+                    d_model=self.dim,
+                    nhead=4,
+                    dim_feedforward=int(4 * self.dim),
+                    dropout=0.0,
+                    activation='gelu',
+                    batch_first=True
+                )
+            )
+        self.transformer = nn.ModuleList(self.transformer)
 
         # conv layers
         n_layers = int(math.log2(self.h))
         self.conv_layer = []
         for _ in range(n_layers):
             self.conv_layer.append(nn.Sequential(
+                nn.Conv2d(self.dim, self.dim, 3, stride=1, padding=1),
+                nn.BatchNorm2d(self.dim),
+                nn.LeakyReLU(),
                 nn.Conv2d(self.dim, self.dim, 3, stride=2, padding=1),
                 nn.BatchNorm2d(self.dim),
+                nn.LeakyReLU(),
             ))
         self.conv_layer = nn.ModuleList(self.conv_layer)
 
@@ -362,40 +360,50 @@ class Head_prob(nn.Module):
             nn.init.normal_(m.bias, mean=0.0, std=1e-6)
 
 
-    def forward(self, x):
+    def forward(self, clip_feat, query_feat, bbox_top):
         '''
-        x in shape [b,t,N=h*w*n,c=1]
+        clip_feat: [b*t,c,h,w]
+        query_feat: [b,c,h,w]
+        bbox_top: [b,t,4]
         '''
-        b, t = x.shape[:2]
+        b,t,_ = bbox_top.shape
+        H, W = clip_feat.shape[-2:]
 
-        x = x.squeeze(-1)
-        x = rearrange(x, 'b t (h w n) -> b (t h w) n', h=self.h, w=self.w, n=self.dim) #+ self.pe_3d
+        bbox_top = rearrange(bbox_top, 'b t c -> (b t) c')
+        roi_boxes = get_roi_box(bbox_top, H, W)
+
+        clip_feat = torchvision.ops.roi_align(clip_feat, roi_boxes, output_size=self.output_size)  # [b*t,c,8,8]
+        query_feat = F.interpolate(query_feat, size=self.output_size, mode='bilinear')  # [b,c,h,w]
+        query_feat = query_feat.unsqueeze(1).repeat(1,t,1,1,1)  # [b,t,c,h,w]
         
-        # mask = self.get_mask(x, t=t)
-        # for layer in self.feat_corr_transformer:
-        #     x = layer(x, src_mask=mask)
+        query_feat = rearrange(query_feat, 'b t c h w -> (b t) (h w) c')    # [b*t,h*w,c]
+        clip_feat = rearrange(clip_feat, 'b c h w -> b (h w) c')            # [b*t,h*w,c]
+
+        for layer in self.transformer:
+            query_feat = layer(query_feat, clip_feat)
         
-        x = rearrange(x, 'b (t h w) n -> (b t) n h w', t=t, h=self.h, w=self.w, n=self.dim)
+        query_feat = rearrange(query_feat, 'b (h w) c -> b c h w', h=self.h, w=self.w)
+
         for layer in self.conv_layer:
-            x = layer(x)
-        x = x.squeeze()
+            query_feat = layer(query_feat)
 
-        x = self.mlp(x).squeeze()   # [b*t]
-        x = rearrange(x, '(b t) -> b t', b=b, t=t)
-        return x
-    
-    def get_mask(self, src, t):
-        if not torch.is_tensor(self.temporal_mask):
-            hw = src.shape[1] // t
-            thw = src.shape[1]
-            mask = torch.ones(thw, thw).float() * float('-inf')
+        query_feat = query_feat.squeeze()
+        pred = self.mlp(query_feat).squeeze()   # [b*t]
+        pred = rearrange(pred, '(b t) -> b t', b=b, t=t)
 
-            window_size = self.window_transformer // 2
+        return pred
 
-            for i in range(t):
-                min_idx = max(0, (i-window_size)*hw)
-                max_idx = min(thw, (i+window_size+1)*hw)
-                mask[i*hw: (i+1)*hw, min_idx: max_idx] = 0.0
-            mask = mask.to(src.device)
-            self.temporal_mask = mask
-        return self.temporal_mask
+
+def get_roi_box(bbox, h, w):
+    '''
+    bbox in shape [b,4], with value in range [0,1]
+    '''
+    b = bbox.shape[0]
+
+    bbox = bbox.clamp(min=0.0, max=1.0)
+    bbox = dataset_utils.recover_bbox(bbox, h, w)
+    bbox = dataset_utils.check_bbox_permute(bbox)
+
+    idx_tensor = torch.arange(b, device=bbox.device).float().view(-1, 1)
+    roi_boxes = torch.cat([idx_tensor, bbox], dim=-1)
+    return roi_boxes
