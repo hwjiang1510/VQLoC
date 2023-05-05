@@ -41,7 +41,7 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
         time_meters.add_loss_value('Prediction time', time.time() - end)
         end = time.time()
 
-        losses, preds_top = loss_utils.get_losses_with_anchor(config, preds, sample)
+        losses, preds_top, sample = loss_utils.get_losses_with_anchor(config, preds, sample)
         total_loss = 0.0
         for k, v in losses.items():
             if 'loss' in k:

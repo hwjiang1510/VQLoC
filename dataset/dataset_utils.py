@@ -157,6 +157,70 @@ def process_data(config, sample, iter=0, split='train', device='cuda'):
     return sample
 
 
+def replicate_sample_for_hnm(gts):
+    '''
+        gts = {
+            'clip':                 in [b,t,c,h,w]
+            'clip_with_bbox':       in [b,t]
+            'before_query':         in [b,t]
+            'clip_bbox':            in [b,t,4]
+            'query':                in [b,c,h,w]
+            'clip_h':               in [b]
+            'clip_w':               in [b]
+        }
+    '''
+    clip = gts['clip']
+    clip_with_bbox = gts['clip_with_bbox']
+    before_query = gts['before_query']
+    clip_bbox = gts['clip_bbox']
+    query = gts['query']
+    clip_h, clip_w = gts['clip_h'], gts['clip_w']
+
+    b, t = clip.shape[:2]
+    device = clip.device
+
+    new_clip = []
+    new_clip_with_bbox = []
+    new_before_query = []
+    new_clip_bbox = []
+    new_query = []
+    new_clip_h, new_clip_w = [], []
+
+    for i in range(b):
+        for j in range(b):
+            new_clip.append(clip[i])
+            new_query.append(query[j])
+            if i == j:
+                new_clip_with_bbox.append(clip_with_bbox[i])
+                new_before_query.append(before_query[i])
+                new_clip_bbox.append(clip_bbox[i])
+            else:
+                new_clip_with_bbox.append(torch.zeros(t).float().to(device))
+                new_before_query.append(torch.ones(t).bool().to(device))
+                new_clip_bbox.append(torch.tensor([[0.0, 0.0, 0.0001, 0.0001]]).repeat(t,1).float().to(device))
+            new_clip_h.append(clip_h[i])
+            new_clip_w.append(clip_w[i])
+    
+    new_clip = torch.stack(new_clip)
+    new_clip_with_bbox = torch.stack(new_clip_with_bbox)
+    new_before_query = torch.stack(new_before_query)
+    new_clip_bbox = torch.stack(new_clip_bbox)
+    new_clip_h = torch.stack(new_clip_h)
+    new_clip_w = torch.stack(new_clip_w)
+
+    new_gts = {
+        'clip': new_clip,                       # in [b^2,t,c,h,w]
+            'clip_with_bbox': new_clip_bbox,    # in [b^2,t]
+            'before_query': new_before_query,   # in [b^2,t]
+            'clip_bbox': new_clip_bbox,         # in [b^2,t,4]
+            'query': new_query,                 # in [b^2,c,h,w]
+            'clip_h': new_clip_h,               # in [b^2]
+            'clip_w': new_clip_w,               # in [b^2]
+        }
+
+    return new_gts
+
+
 def normalize_bbox(bbox, h, w):
     '''
     bbox torch tensor in shape [4] or [...,4], under torch axis

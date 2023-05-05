@@ -6,9 +6,13 @@ from torchvision import transforms
 from einops import rearrange
 from model.corr_clip_anchor import default_aspect_ratios
 from utils.anchor_utils import assign_labels
+from dataset import dataset_utils
 
 
 def get_losses_with_anchor(config, preds, gts):
+    if config.train.use_hnm:
+        gts = dataset_utils.replicate_sample_for_hnm(gts)
+
     pred_center = preds['center']   # [b,t,N,2]
     pred_hw = preds['hw']           # [b,t,N,2], actually half of hw
     pred_bbox = preds['bbox']       # [b,t,N,4]
@@ -125,7 +129,7 @@ def get_losses_with_anchor(config, preds, gts):
             'prob': rearrange(pred_prob_refine, '(b t) -> b t', b=b, t=t)
         }
 
-    return loss, pred_top
+    return loss, pred_top, gts
 
 
 def get_losses_head(config, refine_prob, gts, preds_top):
@@ -319,20 +323,19 @@ def BCELogitsLoss_with_HNM(pred_prob, gt_prob, positive, gt_before_query):
     gt_prob = rearrange(gt_prob, 'b t N -> (b t N)')                                    # [b*t*N]
     BCE_loss = F.binary_cross_entropy_with_logits(pred_prob, gt_prob, reduction='none') # [b*t*N]
 
-    pred_prob = rearrange(pred_prob, '(b t N) -> (b t) N')
-    gt_prob = rearrange(gt_prob, '(b t N) -> (b t) N')
-    BCE_loss = rearrange(BCE_loss, '(b t N) -> (b t) N')
-    positive = rearrange(positive, '(b t N) -> (b t) N')
-    gt_before_query = rearrange(gt_before_query, 'b t -> (b t)')
+    pred_prob = rearrange(pred_prob, '(b t N) -> (b t) N', b=b, t=t)
+    gt_prob = rearrange(gt_prob, '(b t N) -> (b t) N', b=b, t=t)
+    BCE_loss = rearrange(BCE_loss, '(b t N) -> (b t) N', b=b, t=t)
+    positive = rearrange(positive, '(b t N) -> (b t) N', b=b, t=t)
+    gt_before_query = rearrange(gt_before_query, 'b t -> (b t)', b=b, t=t)
 
     loss = HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query)
-
     return loss.mean()
 
 
-def HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query, ratio_pos_neg=3., ratio_hard=0.1):
+def HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query, ratio_neg_pos=3., ratio_hard=0.1):
     '''
-    ratio: positive / negative ratio
+    ratio_neg_pos: negative / positive ratio
     pred_prob, gt_prob, positive, BCE_loss in [B,N]
     gt_before_query in [B]
     topk is the number of negatives we keep if no positive assigned
@@ -343,38 +346,29 @@ def HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query, ratio
     '''
     # N = 16*16*12 or 8*8*12
     B, N = pred_prob.shape
-    topK = int(N * ratio_hard)  # the number of anchors retained if no positive assigned
 
-    pred_prob = pred_prob[gt_before_query.bool()]    # reject unreliable annotations after query frame
+    pred_prob = pred_prob[gt_before_query.bool()]    # [B',N], reject unreliable annotations after query frame
     gt_prob = gt_prob[gt_before_query.bool()]
     positive = positive[gt_before_query.bool()]
     BCE_loss = BCE_loss[gt_before_query.bool()]
     B = pred_prob.shape[0]
 
-    mined_loss = []
-    for i in range(B):
-        cur_prob = pred_prob[i]         # [N], for all anchor box in the frame
-        cur_prob_gt = gt_prob[i]        # [N]
-        cur_positive = positive[i]      # [N]
-        cur_loss = BCE_loss[i]          # [N]
+    num_positives = torch.sum(positive).item()
+    num_negatives = int(ratio_neg_pos * num_positives)
+    if num_negatives == 0:
+        num_negatives = int(ratio_hard * B * N)
 
-        cur_loss_positives = cur_loss[cur_positive.bool()]
-        cur_loss_negatives = cur_loss[~cur_positive.bool()]
+    pred_prob = rearrange(pred_prob, 'b n -> (b n)')
+    gt_prob = rearrange(gt_prob, 'b n -> (b n)')
+    positive = rearrange(positive, 'b n -> (b n)')
+    BCE_loss = rearrange(BCE_loss, 'b n -> (b n)')
 
-        if cur_prob_gt.any() and cur_positive.any():
-            # case 2
-            num_positives = int(cur_positive.sum().item())
-            num_negatives = int(num_positives * ratio_pos_neg)
-            cur_loss_negatives_hard, hard_neg_idxs = torch.topk(cur_loss_negatives, num_negatives)
-            mined_loss.append(cur_loss_negatives_hard)
-            mined_loss.append(cur_loss_positives)
-        else:
-            # case 1 and 3
-            cur_loss_hard, hard_idxs = torch.topk(cur_loss, topK)
-            mined_loss.append(cur_loss_hard)
-    
-    mined_loss = torch.cat(mined_loss, dim=0)
-    return mined_loss
+    BCE_loss_pos = BCE_loss[positive.bool()]
+    BCE_loss_neg = BCE_loss[~positive.bool()]
+    BCE_loss_neg_hard, _ = torch.topk(BCE_loss_neg, num_negatives)
+
+    BCE_loss_mined = torch.cat([BCE_loss_pos, BCE_loss_neg_hard], dim=0)
+    return BCE_loss_mined
 
 
 
