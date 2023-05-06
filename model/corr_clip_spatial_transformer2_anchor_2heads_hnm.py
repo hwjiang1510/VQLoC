@@ -165,15 +165,14 @@ class ClipMatcher(nn.Module):
                 return out, h, w
             return out
         
-
     def replicate_for_hnm(self, query_feat, clip_feat):
         '''
         query_feat in shape [b,c,h,w]
         clip_feat in shape [b*t,c,h,w]
         '''
         b = query_feat.shape[0]
-        B = clip_feat.shape[0]
-        t = B // b
+        bt = clip_feat.shape[0]
+        t = bt // b
         
         clip_feat = rearrange(clip_feat, '(b t) c h w -> b t c h w', b=b, t=t)
 
@@ -190,7 +189,7 @@ class ClipMatcher(nn.Module):
         return new_clip_feat, new_query_feat
 
 
-    def forward(self, clip, query, fix_backbone=True):
+    def forward(self, clip, query, training=False, fix_backbone=True):
         '''
         clip: in shape [b,t,c,h,w]
         query: in shape [b,c,h2,w2]
@@ -213,7 +212,7 @@ class ClipMatcher(nn.Module):
         all_feat = self.reduce(all_feat)
         query_feat, clip_feat = all_feat.split([b, b*t], dim=0)
 
-        if self.config.train.use_hnm:
+        if self.config.train.use_hnm and training:
             clip_feat, query_feat = self.replicate_for_hnm(query_feat, clip_feat)   # b -> b^2
         
         # find spatial correspondence between query-frame

@@ -37,7 +37,7 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
         # reconstruction loss
         clips, queries = sample['clip'], sample['query']
         #with autocast():
-        preds = model(clips, queries, fix_backbone=config.model.fix_backbone)
+        preds = model(clips, queries, training=True, fix_backbone=config.model.fix_backbone)
         time_meters.add_loss_value('Prediction time', time.time() - end)
         end = time.time()
 

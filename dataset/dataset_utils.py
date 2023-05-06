@@ -209,7 +209,7 @@ def replicate_sample_for_hnm(gts):
     new_clip_w = torch.stack(new_clip_w)
 
     new_gts = {
-        'clip': new_clip,                       # in [b^2,t,c,h,w]
+            'clip': new_clip,                   # in [b^2,t,c,h,w]
             'clip_with_bbox': new_clip_bbox,    # in [b^2,t]
             'before_query': new_before_query,   # in [b^2,t]
             'clip_bbox': new_clip_bbox,         # in [b^2,t,4]
@@ -217,7 +217,6 @@ def replicate_sample_for_hnm(gts):
             'clip_h': new_clip_h,               # in [b^2]
             'clip_w': new_clip_w,               # in [b^2]
         }
-
     return new_gts
 
 

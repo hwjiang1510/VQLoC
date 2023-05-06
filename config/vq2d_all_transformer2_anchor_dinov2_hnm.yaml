@@ -1,8 +1,8 @@
-exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_dropout0.2_positive0.3_qs'
+exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
-workers: 8
+workers: 16
 print_freq: 100
 vis_freq: 1000
 eval_vis_freq: 100
@@ -11,14 +11,18 @@ seed: 42
 # dataset config
 dataset:
   name: 'ego4d_vq2d'
+  name_val: 'ego4d_vq2d'
   query_size: 448
   clip_size_fine: 448
   clip_size_coarse: 448
   clip_num_frames: 30
+  clip_num_frames_val: 30
   clip_sampling: 'rand'
-  clip_reader: 'decord_balance'   # balance positive and negative samples
+  clip_reader: 'decord_balance'
+  clip_reader_val: 'decord_balance'
   frame_interval: 1
   query_square: True
+  padding_value: 'zero' # ['mean', 'zero']
 
 # model config
 model:
@@ -29,9 +33,11 @@ model:
   num_transformer: 3
   type_transformer: 'global'
   resolution_transformer: 8
+  resolution_anchor_feat: 16
   pe_transformer: 'zero'
   window_transformer: 5
-  positive_threshold: 0.3
+  positive_threshold: 0.2
+  positive_topk: 5
 
 # loss config
 loss:
@@ -40,14 +46,14 @@ loss:
   weight_bbox_giou: 0.3
   weight_bbox_ratio: 1.0
   weight_prob: 10.0
-  prob_bce_weight: [0.1, 0.9]
+  prob_bce_weight: [0.7, 0.3]
 
 # training config
 train:
   resume: True
   batch_size: 4
   total_iteration: 60000
-  lr: 0.0002
+  lr: 0.0001
   weight_decay: 0.005
   schedualr_milestones: [7000, 14000, 20000, 25000]
   schedular_gamma: 0.3
@@ -55,6 +61,7 @@ train:
   accumulation_step: 1
   aug_clip: True
   aug_query: False
+  aug_clip_iter: -1
   aug_brightness: 0.3
   aug_contrast: 0.3
   aug_saturation: 0.2

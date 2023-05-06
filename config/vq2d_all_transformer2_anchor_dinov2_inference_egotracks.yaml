@@ -1,4 +1,4 @@
-exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotrack_fix-assign_inference'
+exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotrack_fix-assign_res16_inference'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
@@ -32,7 +32,7 @@ model:
   num_transformer: 3
   type_transformer: 'global'
   resolution_transformer: 8
-  resolution_anchor_feat: 8
+  resolution_anchor_feat: 16
   pe_transformer: 'zero'
   window_transformer: 5
   positive_threshold: 0.3
@@ -42,8 +42,8 @@ model:
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks/cpt_last.pth.tar'
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_longer/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_frame60/cpt_last.pth.tar'
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_neg/cpt_last.pth.tar'
-  cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_fix-assign-res8-no-process/cpt_last.pth.tar'
-  #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_fix-assign-res16-no-process/cpt_last.pth.tar'
+  #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_fix-assign-res8-no-process/cpt_last.pth.tar'
+  cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_fix-assign-res16-no-process/cpt_last.pth.tar'
 
 # loss config
 loss:

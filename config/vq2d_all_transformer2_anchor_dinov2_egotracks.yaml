@@ -1,4 +1,4 @@
-exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotracks_fix-assign-res16-no-process'
+exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_drop0.2_pos0.2_egotracks_fix-assign-res8_aug15k'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
@@ -22,7 +22,7 @@ dataset:
   clip_reader_val: 'decord_random'
   frame_interval: 1
   query_square: True
-  padding_value: 'mean' # ['mean', 'zero']
+  padding_value: 'zero' # ['mean', 'zero']
 
 # model config
 model:
@@ -33,10 +33,10 @@ model:
   num_transformer: 3
   type_transformer: 'global'
   resolution_transformer: 8
-  resolution_anchor_feat: 16
+  resolution_anchor_feat: 8
   pe_transformer: 'zero'
   window_transformer: 5
-  positive_threshold: 0.3
+  positive_threshold: 0.2
   positive_topk: 5
 
 # loss config
@@ -61,7 +61,7 @@ train:
   accumulation_step: 1
   aug_clip: True
   aug_query: False
-  aug_clip_iter: 1000000
+  aug_clip_iter: 15000
   aug_brightness: 0.3
   aug_contrast: 0.3
   aug_saturation: 0.2
