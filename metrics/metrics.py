@@ -26,11 +26,12 @@ def compute_visual_query_metrics(
     total_frames_in_clip: List[int] = None,
     area_ranges: Dict[str, List[int]] = {
         "all": [0 ** 2, 1e5 ** 2],
-        "medium": [32 ** 2, 96 ** 2],
-        "large": [96 ** 2, 1e5 ** 2],
+        "small": [0 ** 2, 64 ** 2],
+        "medium": [64 ** 2, 192 ** 2],
+        "large": [192 ** 2, 1e5 ** 2],
     },
     vc_rt_pairings: Dict[str, Tuple[str, str]] = {
-        "all": ("all", "all"),
+        "all": ("all", "large"),
     },
 ) -> Dict[str, float]:
     """

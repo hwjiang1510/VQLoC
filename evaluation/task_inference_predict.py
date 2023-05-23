@@ -10,7 +10,7 @@ from einops import rearrange
 from utils import vis_utils
 from utils.loss_utils import GiouLoss
 
-NMS_IOU = 0.5
+NMS_IOU = 0.65
 
 class Task:
     def __init__(self, config, annots):
@@ -151,42 +151,51 @@ def inference_video(config, model, clip_path, query_frame, visual_crop, save_pat
 
 def get_top_predictions(config, preds, num_frames, oshape):
     '''
-    preds with shape [b,t,N,...], N is number of anchor box
+    preds with shape [b,t,N,...] or [b,t,...], N is number of anchor box
     '''
     owidth, oheight = oshape    # origin resolution of clips
     resize_res = config.dataset.clip_size_coarse
 
-    pred_center = preds['center']   # [b,t,N,2]
+    pred_center = preds['center']   # [b,t,N,2] or [b,t,2]
     pred_hw = preds['hw']           # [b,t,N,2], actually half of hw
     pred_bbox = preds['bbox']       # [b,t,N,4]
     pred_prob = preds['prob']       # [b,t,N]
-    b,t,N = pred_prob.shape
 
-    pred_prob = rearrange(pred_prob, 'b t N -> (b t) N')
-    pred_hw = rearrange(pred_hw, 'b t N c -> (b t) N c')
-    pred_center = rearrange(pred_center, 'b t N c -> (b t) N c')
-    pred_bbox = rearrange(pred_bbox, 'b t N c -> (b t) N c')
+    if len(pred_prob.shape) == 3:
+        # with anchor
+        b,t,N = pred_prob.shape
+        pred_prob = rearrange(pred_prob, 'b t N -> (b t) N')
+        pred_hw = rearrange(pred_hw, 'b t N c -> (b t) N c')
+        pred_center = rearrange(pred_center, 'b t N c -> (b t) N c')
+        pred_bbox = rearrange(pred_bbox, 'b t N c -> (b t) N c')
+        pred_prob_all = pred_prob.clone()
 
-    pred_prob, top_idx = torch.max(pred_prob, dim=-1)  # [b*t], [b*t]
-    pred_bbox = torch.gather(pred_bbox, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,4)).squeeze()       # [b*t,4]
-    pred_hw = torch.gather(pred_hw, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,2)).squeeze()           # [b*t,2]
-    pred_center = torch.gather(pred_center, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,2)).squeeze()   # [b*t,2]
+        pred_prob, top_idx = torch.max(pred_prob, dim=-1)  # [b*t], [b*t]
+        pred_bbox = torch.gather(pred_bbox, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,4)).squeeze()       # [b*t,4]
+        pred_hw = torch.gather(pred_hw, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,2)).squeeze()           # [b*t,2]
+        pred_center = torch.gather(pred_center, dim=1, index=top_idx.unsqueeze(-1).unsqueeze(-1).repeat(1,1,2)).squeeze()   # [b*t,2]
 
-    #pred_prob = process_prob(top_idx, pred_prob, preds)    # [b*t]
+    else:
+        b,t = pred_prob.shape
+        pred_prob = rearrange(pred_prob, 'b t -> (b t)')
+        pred_hw = rearrange(pred_hw, 'b t c -> (b t) c')
+        pred_center = rearrange(pred_center, 'b t c -> (b t) c')
+        pred_bbox = rearrange(pred_bbox, 'b t c -> (b t) c')
 
+        #iou = process_prob(top_idx, pred_prob, preds)    # [b*t,N]
     pred_prob_raw = pred_prob.clone().detach().cpu()
     pred_bbox_raw = pred_bbox.clone().detach().cpu()
-    
     pred_prob = pred_prob[:num_frames]
     pred_bbox = pred_bbox[:num_frames]
-    
     pred_bbox_processed = process_bbox_prediction(pred_bbox, owidth, oheight, resize_res)
     
     preds = {
         'bbox_raw': pred_bbox_raw,
         'prob_raw': pred_prob_raw,
         'bbox': pred_bbox_processed.detach().cpu(),
-        'prob': pred_prob.detach().cpu()
+        'prob': pred_prob.detach().cpu(),
+        # 'anchor_iou_top': iou[:num_frames].detach().cpu(),
+        # 'prob_all': pred_prob_all[:num_frames].detach().cpu()
     }
     return preds
 
@@ -207,20 +216,21 @@ def process_prob(top_idx, top_prob, preds):
     top_bbox = top_bbox.reshape(-1,1,4)     # [b*t,1,4]
 
     iou = get_iou(top_bbox, pred_bbox)  # [b*t,N]
+    return iou
 
-    mean_prob = []
-    for i in range(b*t):
-        cur_iou = iou[i]    # [N]
-        cur_prob = pred_prob[i]
-        cur_iou_mask = cur_iou > NMS_IOU
-        if cur_iou_mask.sum() > 0:
-            NMS_prob = cur_prob[cur_iou_mask].mean().item()
-        else:
-            NMS_prob = top_prob[i]
-        #print(top_prob[i], cur_iou.mean(), cur_iou_mask.sum(), NMS_prob)
-        mean_prob.append(NMS_prob)
-    mean_prob = torch.tensor(mean_prob)     # [b*t]
-    return mean_prob
+    # mean_prob = []
+    # for i in range(b*t):
+    #     cur_iou = iou[i]    # [N]
+    #     cur_prob = pred_prob[i]
+    #     cur_iou_mask = cur_iou > NMS_IOU
+    #     if cur_iou_mask.sum() > 0:
+    #         NMS_prob = cur_prob[cur_iou_mask].mean()
+    #     else:
+    #         NMS_prob = top_prob[i]
+    #     #print(torch.sigmoid(top_prob[i]).item(), cur_iou.mean().item(), cur_iou_mask.sum().item(), torch.sigmoid(NMS_prob).item())
+    #     mean_prob.append(NMS_prob)
+    # mean_prob = torch.tensor(mean_prob)     # [b*t]
+    # return mean_prob
 
 
 def process_bbox_prediction(pred_bbox, owidth, oheight, resize_res):

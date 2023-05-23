@@ -18,6 +18,11 @@ def build_backbone(config):
         if type == 'vitb16' and config.model.bakcbone_use_mae_weight:
             mae_weight = torch.load('/vision/hwjiang/episodic-memory/VQ2D/checkpoint/mae_pretrain_vit_base.pth')['model']
             backbone.load_state_dict(mae_weight)
+    elif name == 'dinov2':
+        assert type in ['vits14', 'vitb14', 'vitl14', 'vitg14']
+        backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_{}'.format(type))
+        down_rate = 14
+        backbone_dim = 768
     return backbone, down_rate, backbone_dim
 
 

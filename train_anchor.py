@@ -18,6 +18,7 @@ from config.config import config, update_config
 ## from model.corr_clip_spatial_transformer2_anchor import ClipMatcher
 # from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
 from model.corr_clip_spatial_transformer2_anchor_2heads_hnm import ClipMatcher
+#from model.corr_clip_spatial_transformer2_anchor_2heads_hnm_cat import ClipMatcher
 #from model.corr_clip_spatial_transformer2_anchor_3heads import ClipMatcher
 from utils import exp_utils, train_utils, dist_utils
 from dataset import dataset_utils

@@ -37,7 +37,13 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
         # reconstruction loss
         clips, queries = sample['clip'], sample['query']
         #with autocast():
-        preds = model(clips, queries, training=True, fix_backbone=config.model.fix_backbone)
+        if config.train.use_query_roi and 'query_frame' in sample.keys():
+            preds = model(clips, 
+                          sample['query_frame'], 
+                          query_frame_bbox=sample['query_frame_bbox'], 
+                          training=True, fix_backbone=config.model.fix_backbone)
+        else:
+            preds = model(clips, queries, training=True, fix_backbone=config.model.fix_backbone)
         time_meters.add_loss_value('Prediction time', time.time() - end)
         end = time.time()
 
@@ -114,7 +120,13 @@ def validate(config, loader, model, epoch, output_dir, device, rank, wandb_run=N
             sample = dataset_utils.process_data(config, sample, split='val', device=device)     # normalize and data augmentations on GPU
 
             clips, queries = sample['clip'], sample['query']
-            preds = model(clips, queries, fix_backbone=config.model.fix_backbone)
+            if config.train.use_query_roi and 'query_frame' in sample.keys():
+                preds = model(clips, 
+                            sample['query_frame'], 
+                            query_frame_bbox=sample['query_frame_bbox'], 
+                            training=False, fix_backbone=config.model.fix_backbone)
+            else:
+                preds = model(clips, queries, training=False, fix_backbone=config.model.fix_backbone)
             results, preds_top = val_performance(config, preds, sample)
             try:
                 for k, v in results.items():

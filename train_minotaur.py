@@ -16,7 +16,8 @@ from torch.cuda.amp import autocast as autocast
 from config.config import config, update_config
 
 ## from model.corr_clip_spatial_transformer2_anchor import ClipMatcher
-from model.minotaur import Minotaur
+# from model.minotaur import Minotaur
+from model.stark import STARK as Minotaur
 #from model.corr_clip_spatial_transformer2_anchor_3heads import ClipMatcher
 from utils import exp_utils, train_utils, dist_utils
 from dataset import dataset_utils

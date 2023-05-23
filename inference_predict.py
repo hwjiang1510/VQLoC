@@ -21,6 +21,8 @@ from utils import exp_utils
 from evaluation import eval_utils
 from evaluation.task_inference_predict import Task
 from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
+#from model.corr_clip_spatial_transformer2_anchor_2heads_hnm_cat import ClipMatcher
+from model.stark import STARK
 
 
 class WorkerWithDevice(mp.Process):
@@ -35,6 +37,7 @@ class WorkerWithDevice(mp.Process):
         device = torch.device(f"cuda:{self.device_id}")
 
         model = ClipMatcher(self.config).to(device)
+        #model = STARK(self.config).to(device)
         print('Model with {} parameters'.format(sum(p.numel() for p in model.parameters())))
         checkpoint = torch.load(self.config.model.cpt_path, map_location='cpu')
         model.load_state_dict(checkpoint["state_dict"], strict=True)

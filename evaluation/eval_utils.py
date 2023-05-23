@@ -2,6 +2,7 @@ import warnings
 import numpy as np
 from utils.loss_utils import GiouLoss
 
+
 def convert_annotations_to_clipwise_list(annotations):
     clipwise_annotations_list = {}
     for v in annotations["videos"]:

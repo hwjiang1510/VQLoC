@@ -45,8 +45,8 @@ loss:
   weight_bbox_hw: 1.0
   weight_bbox_giou: 0.3
   weight_bbox_ratio: 1.0
-  weight_prob: 10.0
-  prob_bce_weight: [0.7, 0.3]
+  weight_prob: 100.0
+  prob_bce_weight: [1.0, 1.0]
 
 # training config
 train:

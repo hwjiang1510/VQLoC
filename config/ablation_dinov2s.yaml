@@ -1,12 +1,12 @@
-exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_lr3_fl_rand2'
-exp_group: 'vq2d_transformer_all_dinov2'
+exp_name: 'ablation_dinov2s'
+exp_group: 'vq2d_transformer_all_ablation'
 output_dir: './output/'
 log_dir: './log'
 workers: 16
 print_freq: 100
 vis_freq: 1000
 eval_vis_freq: 100
-seed: 42
+seed: 0
 
 # dataset config
 dataset:
@@ -18,7 +18,7 @@ dataset:
   clip_num_frames: 30
   clip_num_frames_val: 30
   clip_sampling: 'rand'
-  clip_reader: 'decord_random'
+  clip_reader: 'decord_balance'
   clip_reader_val: 'decord_balance'
   frame_interval: 1
   query_square: True
@@ -27,7 +27,7 @@ dataset:
 # model config
 model:
   backbone_name: 'dinov2'
-  backbone_type: 'vitb14'
+  backbone_type: 'vits14'
   bakcbone_use_mae_weight: False
   fix_backbone: True
   num_transformer: 3
@@ -36,8 +36,9 @@ model:
   resolution_anchor_feat: 16
   pe_transformer: 'zero'
   window_transformer: 5
-  positive_threshold: 0.3
+  positive_threshold: 0.2
   positive_topk: 5
+  cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/ablation_dinov2s/ablation_dinov2s/cpt_last.pth.tar'
 
 # loss config
 loss:
@@ -53,7 +54,7 @@ train:
   resume: True
   batch_size: 3
   total_iteration: 60000
-  lr: 0.0003
+  lr: 0.0001
   weight_decay: 0.005
   schedualr_milestones: [7000, 14000, 20000, 25000]
   schedular_gamma: 0.3
@@ -78,7 +79,6 @@ train:
   aug_prob_flip: 0.5
   aug_prob_crop: 1.0
   aug_prob_affine: 1.0
-  use_hnm: True
 
 # test config
 test:

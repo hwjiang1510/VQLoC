@@ -96,8 +96,8 @@ def process_data(config, sample, iter=0, split='train', device='cuda'):
                 K.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.3, hue=0, p=1.0),
                 K.RandomHorizontalFlip(p=0.5),
                 K.RandomResizedCrop((H, W), scale=(0.66, 1.0), ratio=(crop_ratio_min, crop_ratio_max), p=1.0),
-                K.RandomAffine(affine_degree, [affine_translate, affine_translate], [affine_scale_min, affine_scale_max], 
-                                [affine_shear_min, affine_shear_max], p=prob_affine),
+                # K.RandomAffine(affine_degree, [affine_translate, affine_translate], [affine_scale_min, affine_scale_max], 
+                #                 [affine_shear_min, affine_shear_max], p=prob_affine),
                 data_keys=[DataKey.INPUT, DataKey.BBOX_XYXY],  # Just to define the future input here.
                 same_on_batch=True,
                 )
@@ -107,19 +107,34 @@ def process_data(config, sample, iter=0, split='train', device='cuda'):
                 K.RandomResizedCrop((query_size, query_size), scale=(crop_sacle, 1.0), ratio=(crop_ratio_min, crop_ratio_max), p=prob_crop),
                 # K.RandomAffine(affine_degree, [affine_translate, affine_translate], [affine_scale_min, affine_scale_max], 
                 #                 [affine_shear_min, affine_shear_max], p=prob_affine
-                K.RandomAffine(affine_degree, [0, 0], [1.0, 1.0], 
-                                [1.0, 1.0], p=prob_affine),
+                # K.RandomAffine(affine_degree, [0, 0], [1.0, 1.0], 
+                #                 [1.0, 1.0], p=prob_affine),
                 data_keys=["input"],  # Just to define the future input here.
                 same_on_batch=False,
                 )
     
-
+    transform_query_frame = K.AugmentationSequential(
+                K.ColorJitter(brightness, contrast, saturation, hue=0, p=prob_color),
+                K.RandomHorizontalFlip(p=prob_flip),
+                # K.RandomAffine(affine_degree, [affine_translate, affine_translate], [affine_scale_min, affine_scale_max], 
+                #                 [affine_shear_min, affine_shear_max], p=prob_affine
+                # K.RandomAffine(affine_degree, [0, 0], [1.0, 1.0], 
+                #                 [1.0, 1.0], p=prob_affine),
+                data_keys=[DataKey.INPUT, DataKey.BBOX_XYXY],  # Just to define the future input here.
+                same_on_batch=False,
+                )
+    
     clip = sample['clip']                           # [B,T,C,H,W]
     query = sample['query']                         # [B,C,H',W']
     clip_with_bbox = sample['clip_with_bbox']       # [B,T]
     clip_bbox = sample['clip_bbox']                 # [B,T,4], with value range [0,1], torch axis
     clip_bbox = recover_bbox(clip_bbox, H, W)       # [B,T,4], with range in image pixels, torch axis
     clip_bbox = bbox_torchTocv2(clip_bbox)          # [B,T,4], with range in image pixels, cv2 axis
+    if config.train.use_query_roi and 'query_frame' in sample.keys():
+        query_frame = sample['query_frame']                         # [B,C,H,W]
+        query_frame_bbox = sample['query_frame_bbox']   
+        query_frame_bbox = recover_bbox(query_frame_bbox, H, W)
+        query_frame_bbox = bbox_torchTocv2(query_frame_bbox)        # [B,4]
 
     # augment clips
     if split == 'train' and config.train.aug_clip and (iter > config.train.aug_clip_iter):        
@@ -143,6 +158,14 @@ def process_data(config, sample, iter=0, split='train', device='cuda'):
     if split == 'train' and config.train.aug_query:
         query = transform_query(query)
         sample['query'] = query.to(device)
+    
+    # augment the query frame
+    if split == 'train' and config.train.aug_query and 'query_frame' in sample.keys():
+        query_frame, query_frame_bbox = transform_query_frame(query)
+        sample['query_frame'] = query_frame.to(device)
+        query_frame_bbox = bbox_cv2Totorch(query_frame_bbox)
+        query_frame_bbox = normalize_bbox(query_frame_bbox, H, W).clamp(min=0.0, max=1.0)
+        sample['query_frame_bbox'] = query_frame_bbox.to(device).float()
 
     # normalize the input clips
     sample['clip_origin'] = sample['clip'].clone()
@@ -154,6 +177,11 @@ def process_data(config, sample, iter=0, split='train', device='cuda'):
     sample['query_origin'] = sample['query'].clone()
     sample['query'] = normalization(sample['query'])
 
+    # normalize input query frame
+    if 'query_frame' in sample.keys():
+        sample['query_frame_origin'] = sample['query_frame'].clone()
+        sample['query_frame'] = normalization(sample['query_frame'])
+
     return sample
 
 
@@ -161,35 +189,43 @@ def replicate_sample_for_hnm(gts):
     '''
         gts = {
             'clip':                 in [b,t,c,h,w]
+            'clip_rigin':           in [b,t,c,h,w]
             'clip_with_bbox':       in [b,t]
             'before_query':         in [b,t]
             'clip_bbox':            in [b,t,4]
             'query':                in [b,c,h,w]
+            'query_origin':         in [b,c,h,w]
             'clip_h':               in [b]
             'clip_w':               in [b]
         }
     '''
     clip = gts['clip']
+    clip_origin = gts['clip_origin']
     clip_with_bbox = gts['clip_with_bbox']
     before_query = gts['before_query']
     clip_bbox = gts['clip_bbox']
     query = gts['query']
+    query_origin = gts['query_origin']
     clip_h, clip_w = gts['clip_h'], gts['clip_w']
 
     b, t = clip.shape[:2]
     device = clip.device
 
     new_clip = []
+    new_clip_origin = []
     new_clip_with_bbox = []
     new_before_query = []
     new_clip_bbox = []
     new_query = []
+    new_query_origin = []
     new_clip_h, new_clip_w = [], []
 
     for i in range(b):
         for j in range(b):
             new_clip.append(clip[i])
+            new_clip_origin.append(clip_origin[i])
             new_query.append(query[j])
+            new_query_origin.append(query_origin[j])
             if i == j:
                 new_clip_with_bbox.append(clip_with_bbox[i])
                 new_before_query.append(before_query[i])
@@ -202,20 +238,25 @@ def replicate_sample_for_hnm(gts):
             new_clip_w.append(clip_w[i])
     
     new_clip = torch.stack(new_clip)
+    new_clip_origin = torch.stack(new_clip_origin)
     new_clip_with_bbox = torch.stack(new_clip_with_bbox)
     new_before_query = torch.stack(new_before_query)
     new_clip_bbox = torch.stack(new_clip_bbox)
     new_clip_h = torch.stack(new_clip_h)
     new_clip_w = torch.stack(new_clip_w)
+    new_query = torch.stack(new_query)
+    new_query_origin = torch.stack(new_query_origin)
 
     new_gts = {
-            'clip': new_clip,                   # in [b^2,t,c,h,w]
-            'clip_with_bbox': new_clip_bbox,    # in [b^2,t]
-            'before_query': new_before_query,   # in [b^2,t]
-            'clip_bbox': new_clip_bbox,         # in [b^2,t,4]
-            'query': new_query,                 # in [b^2,c,h,w]
-            'clip_h': new_clip_h,               # in [b^2]
-            'clip_w': new_clip_w,               # in [b^2]
+            'clip': new_clip,                       # in [b^2,t,c,h,w]
+            'clip_origin': new_clip_origin,         # in [b^2,t,c,h,w]
+            'clip_with_bbox': new_clip_with_bbox,   # in [b^2,t]
+            'before_query': new_before_query,       # in [b^2,t]
+            'clip_bbox': new_clip_bbox,             # in [b^2,t,4]
+            'query': new_query,                     # in [b^2,c,h,w]
+            'query_origin': new_query_origin,       # in [b^2,c,h,w]
+            'clip_h': new_clip_h,                   # in [b^2]
+            'clip_w': new_clip_w,                   # in [b^2]
         }
     return new_gts
 

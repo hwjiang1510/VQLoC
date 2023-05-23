@@ -1,7 +1,7 @@
-exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_fl_rand'
+#exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_fl_rand'
 #exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.2_fix-assign_egotracks_hnm_inference'
 #exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_fix-assign-no_egotracks_hnm_inference'
-#exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_lr3'
+exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_lr3'
 #exp_name: 'stark'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
@@ -50,8 +50,9 @@ model:
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_hnm/default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks/cpt_best_prob.pth.tar'
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_hnm/default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.3_fix-assign-no-res16_egotracks/cpt_last.pth.tar'
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_hnm/default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_random_lr3/cpt_best_prob.pth.tar'
+  cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_hnm/default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_random_lr3/cpt_best_prob.pth.tar'
   #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_minotaur/stark_egotracks/cpt_last.pth.tar'
-  cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_hnm/default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_lr3_fl_rand/cpt_best_prob.pth.tar'
+  #cpt_path: '/vision/hwjiang/vq2d/output/ego4d_egotracks/vq2d_all_transformer2_anchor_dinov2_egotracks_hnm/default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_lr3_fl_rand/cpt_best_prob.pth.tar'
 
 # loss config
 loss:
@@ -94,5 +95,5 @@ train:
 
 # test config
 test:
-  batch_size: 4
+  batch_size: 6
   compute_metric: True

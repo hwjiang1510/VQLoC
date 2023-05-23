@@ -1,4 +1,4 @@
-exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_lr3_fl_rand2'
+exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_roi'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
@@ -18,7 +18,7 @@ dataset:
   clip_num_frames: 30
   clip_num_frames_val: 30
   clip_sampling: 'rand'
-  clip_reader: 'decord_random'
+  clip_reader: 'decord_balance'
   clip_reader_val: 'decord_balance'
   frame_interval: 1
   query_square: True
@@ -36,7 +36,7 @@ model:
   resolution_anchor_feat: 16
   pe_transformer: 'zero'
   window_transformer: 5
-  positive_threshold: 0.3
+  positive_threshold: 0.2
   positive_topk: 5
 
 # loss config
@@ -53,7 +53,7 @@ train:
   resume: True
   batch_size: 3
   total_iteration: 60000
-  lr: 0.0003
+  lr: 0.0001
   weight_decay: 0.005
   schedualr_milestones: [7000, 14000, 20000, 25000]
   schedular_gamma: 0.3
@@ -78,7 +78,7 @@ train:
   aug_prob_flip: 0.5
   aug_prob_crop: 1.0
   aug_prob_affine: 1.0
-  use_hnm: True
+  use_query_roi: True
 
 # test config
 test:

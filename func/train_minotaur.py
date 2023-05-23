@@ -108,8 +108,6 @@ def validate(config, loader, model, epoch, output_dir, device, rank, wandb_run=N
 
     with torch.no_grad():
         for batch_idx, sample in enumerate(loader):
-            if batch_idx % config.eval_vis_freq != 0:
-                continue
             sample = exp_utils.dict_to_cuda(sample)
             sample = dataset_utils.process_data(config, sample, split='val', device=device)     # normalize and data augmentations on GPU
 
@@ -127,6 +125,11 @@ def validate(config, loader, model, epoch, output_dir, device, rank, wandb_run=N
 
             if batch_idx % config.eval_vis_freq == 0 and rank == 0:
                 vis_utils.vis_pred_clip(sample=sample,
+                                        pred=preds,
+                                        iter_num=batch_idx,
+                                        output_dir=output_dir,
+                                        subfolder='val')
+                vis_utils.vis_pred_scores(sample=sample,
                                         pred=preds,
                                         iter_num=batch_idx,
                                         output_dir=output_dir,

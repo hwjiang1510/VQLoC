@@ -9,6 +9,7 @@ from utils.anchor_utils import generate_anchor_boxes_on_regions
 from dataset.dataset_utils import bbox_xyhwToxyxy
 from einops import rearrange
 import math
+from model.mae import vit_base_patch16
 
 
 base_sizes=torch.tensor([[16, 16], [32, 32], [64, 64], [128, 128]], dtype=torch.float32)    # 4 types of size
@@ -31,6 +32,15 @@ def build_backbone(config):
         assert type in ['vits14', 'vitb14', 'vitl14', 'vitg14']
         backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_{}'.format(type))
         down_rate = 14
+        if type == 'vitb14':
+            backbone_dim = 768
+        elif type == 'vits14':
+            backbone_dim = 384
+    elif name == 'mae':
+        backbone = vit_base_patch16()
+        cpt = torch.load('/vision/hwjiang/download/model_weight/mae_pretrain_vit_base.pth')['model']
+        backbone.load_state_dict(cpt, strict=False)
+        down_rate = 16
         backbone_dim = 768
     return backbone, down_rate, backbone_dim
 
@@ -159,6 +169,16 @@ class ClipMatcher(nn.Module):
             h, w = int(h_origin / self.backbone.patch_embed.patch_size[0]), int(w_origin / self.backbone.patch_embed.patch_size[1])
             dim = out.shape[-1]
             out = out.reshape(b, h, w, dim).permute(0,3,1,2)
+            if return_h_w:
+                return out, h, w
+            return out
+        elif self.backbone_name == 'mae':
+            b, _, h_origin, w_origin = x.shape
+            out = self.backbone.forward_features(x) # [b,1+h*w,c]
+            h, w = int(h_origin / self.backbone.patch_embed.patch_size[0]), int(w_origin / self.backbone.patch_embed.patch_size[1])
+            dim = out.shape[-1]
+            out = out[:,1:].reshape(b, h, w, dim).permute(0,3,1,2)  # [b,c,h,w]
+            out = F.interpolate(out, size=(16,16), mode='bilinear')
             if return_h_w:
                 return out, h, w
             return out

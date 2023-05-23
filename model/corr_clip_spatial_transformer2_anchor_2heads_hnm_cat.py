@@ -33,10 +33,7 @@ def build_backbone(config):
         assert type in ['vits14', 'vitb14', 'vitl14', 'vitg14']
         backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_{}'.format(type))
         down_rate = 14
-        if type == 'vitb14':
-            backbone_dim = 768
-        elif type == 'vits14':
-            backbone_dim = 384
+        backbone_dim = 768
     elif name == 'mae':
         backbone = vit_base_patch16()
         cpt = torch.load('/vision/hwjiang/download/model_weight/mae_pretrain_vit_base.pth')['model']
@@ -78,12 +75,22 @@ class ClipMatcher(nn.Module):
         for _ in range(int(math.log2(self.query_feat_size))):
             self.query_down_heads.append(
                 nn.Sequential(
-                    nn.Conv2d(self.backbone_dim, self.backbone_dim, 3, stride=2, padding=1),
-                    nn.BatchNorm2d(self.backbone_dim),
+                    nn.Conv2d(256, 256, 3, stride=2, padding=1),
+                    nn.BatchNorm2d(256),
                     nn.LeakyReLU(inplace=True),
                 )
             )
-        self.query_down_heads = nn.ModuleList(self.query_down_heads)
+        #self.query_down_heads = nn.ModuleList(self.query_down_heads)
+        self.query_down_heads = nn.Sequential(*self.query_down_heads)
+
+        self.cat_process_head = nn.Sequential(
+            nn.Conv2d(512, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(256, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(inplace=True),
+        )
 
         # feature reduce layer
         self.reduce = nn.Sequential(
@@ -207,7 +214,7 @@ class ClipMatcher(nn.Module):
         new_clip_feat = torch.stack(new_clip_feat)      # [b^2,t,c,h,w]
         new_query_feat = torch.stack(new_query_feat)    # [b^2,c,h,w]
 
-        new_clip_feat = rearrange(new_clip_feat, 'b t c h w -> (b t) c h w')
+        new_query_feat = rearrange(new_query_feat, 'b t c h w -> (b t) c h w')
         return new_clip_feat, new_query_feat
 
 
@@ -242,20 +249,25 @@ class ClipMatcher(nn.Module):
 
         if self.config.train.use_hnm and training:
             clip_feat, query_feat = self.replicate_for_hnm(query_feat, clip_feat)   # b -> b^2
-            b = b**2
         
         # find spatial correspondence between query-frame
-        query_feat = rearrange(query_feat.unsqueeze(1).repeat(1,t,1,1,1), 'b t c h w -> (b t) (h w) c')  # [b*t,n,c]
-        clip_feat = rearrange(clip_feat, 'b c h w -> b (h w) c')                                         # [b*t,n,c]
-        for layer in self.CQ_corr_transformer:
-            clip_feat = layer(clip_feat, query_feat)                                                     # [b*t,n,c]
-        clip_feat = rearrange(clip_feat, 'b (h w) c -> b c h w', h=h, w=w)                               # [b*t,c,h,w]
+        query_feat = self.query_down_heads(query_feat)  # [b,c,1,1]
+        query_feat = query_feat.unsqueeze(1).repeat(1,t,1,h,w)  # [b,t,c,h,w]
+        query_feat = rearrange(query_feat, 'b t c h w -> (b t) c h w')
+        clip_feat = torch.cat([clip_feat, query_feat], dim=1)   # [b*t,2c,h,w]
+        clip_feat = self.cat_process_head(clip_feat)
+
+        # query_feat = rearrange(query_feat.unsqueeze(1).repeat(1,t,1,1,1), 'b t c h w -> (b t) (h w) c')  # [b*t,n,c]
+        # clip_feat = rearrange(clip_feat, 'b c h w -> b (h w) c')                                         # [b*t,n,c]
+        # for layer in self.CQ_corr_transformer:
+        #     clip_feat = layer(clip_feat, query_feat)                                                     # [b*t,n,c]
+        # clip_feat = rearrange(clip_feat, 'b (h w) c -> b c h w', h=h, w=w)                               # [b*t,c,h,w]
 
         # down-size features and find spatial-temporal correspondence
         for head in self.down_heads:
             clip_feat = head(clip_feat)
             if list(clip_feat.shape[-2:]) == [self.resolution_transformer]*2:
-                clip_feat = rearrange(clip_feat, '(b t) c h w -> b (t h w) c', b=b) + self.pe_3d
+                clip_feat = rearrange(clip_feat, '(b t) c h w ->b (t h w) c', b=b) + self.pe_3d
                 mask = self.get_mask(clip_feat, t)
                 for layer in self.feat_corr_transformer:
                     clip_feat = layer(clip_feat, src_mask=mask)

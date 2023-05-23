@@ -1,4 +1,4 @@
-exp_name: 'minotaur_egotracks'
+exp_name: 'stark_egotracks'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
@@ -18,8 +18,8 @@ dataset:
   clip_num_frames: 30
   clip_num_frames_val: 30
   clip_sampling: 'rand'
-  clip_reader: 'decord_random'
-  clip_reader_val: 'decord_random'
+  clip_reader: 'decord_balance'
+  clip_reader_val: 'decord_balance'
   frame_interval: 1
   query_square: True
 
@@ -43,12 +43,12 @@ loss:
   weight_bbox_giou: 0.3
   weight_bbox_ratio: 1.0
   weight_prob: 10.0
-  prob_bce_weight: [0.7, 0.3]
+  prob_bce_weight: [1.0, 1.0]
 
 # training config
 train:
   resume: True
-  batch_size: 4
+  batch_size: 2
   total_iteration: 60000
   lr: 0.0001
   weight_decay: 0.005

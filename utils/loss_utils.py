@@ -19,9 +19,7 @@ def get_losses_with_anchor(config, preds, gts):
     pred_prob = preds['prob']       # [b,t,N]
     anchor = preds['anchor']        # [1,1,N,4]
     if 'prob_refine' in preds.keys():
-        pred_prob_refine = preds['prob_refine']     # [b,t]
-    if 'giou' in preds.keys():
-        pred_giou = preds['giou']                   # [b,t]             
+        pred_prob_refine = preds['prob_refine']     # [b,t]            
     b,t,N = pred_prob.shape 
     device = pred_prob.device
 
@@ -37,7 +35,7 @@ def get_losses_with_anchor(config, preds, gts):
 
     # assign labels to anchors
     if gt_prob.bool().any():
-        assign_label = assign_labels(anchor, gt_bbox, 
+        assign_label = assign_labels(anchor.repeat(b,t,1,1), gt_bbox,   # anchor.repeat(b,t,1,1) / pred_bbox
                                      iou_threshold=config.model.positive_threshold,
                                      topk=config.model.positive_topk)               # [b,t,N]
         positive = torch.logical_and(gt_prob.unsqueeze(-1).repeat(1,1,N).bool(),
@@ -45,9 +43,12 @@ def get_losses_with_anchor(config, preds, gts):
         positive = rearrange(positive, 'b t N -> (b t N)')                          # [b*t*N]
     else:
         positive = torch.zeros(b,t,N).reshape(-1).bool().to(device)
+
+    if torch.sum(positive.float()).item() == 0:   
+        positive[:1] = True
     loss_mask = positive.float().unsqueeze(1)                                    # [b*t*N,1]
 
-    #print((pred_bbox-anchor).mean().item(), positive.sum().item(), torch.ones_like(positive).sum().item(), gt_prob.unsqueeze(-1).repeat(1,1,N).sum().item())
+    #print(positive.sum().item(), torch.ones_like(positive).sum().item(), gt_prob.unsqueeze(-1).repeat(1,1,N).sum().item())
     
     # anchor box regression loss
     if torch.sum(positive.float()).item() > 0:
@@ -76,13 +77,14 @@ def get_losses_with_anchor(config, preds, gts):
         giou = torch.tensor(0.).cuda()
 
     # anchor box occurance loss
-    if config.train.use_hnm:
-        loss_prob = BCELogitsLoss_with_HNM(pred_prob, gt_prob, positive, gt_before_query, config.loss.prob_bce_weight)
-    else:
-        pred_prob = rearrange(pred_prob, 'b t N -> (b t N)')
-        gt_before_query_replicate = rearrange(gt_before_query.unsqueeze(2).repeat(1,1,N), 'b t N -> (b t N)')
-        loss_prob = focal_loss(pred_prob[gt_before_query_replicate.bool()].float(),
-                            positive[gt_before_query_replicate.bool()].float())
+    # if config.train.use_hnm:
+    #     loss_prob = BCELogitsLoss_with_HNM(pred_prob, gt_prob, positive, gt_before_query, config.loss.prob_bce_weight)
+    #     pred_prob = rearrange(pred_prob, 'b t N -> (b t N)')
+    # else:
+    pred_prob = rearrange(pred_prob, 'b t N -> (b t N)')
+    gt_before_query_replicate = rearrange(gt_before_query.unsqueeze(2).repeat(1,1,N), 'b t N -> (b t N)')
+    loss_prob = focal_loss(pred_prob[gt_before_query_replicate.bool()].float(),
+                        positive[gt_before_query_replicate.bool()].float())
     
     # probability loss
     if 'prob_refine' in preds.keys():
@@ -372,12 +374,13 @@ def HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query, weigh
 
         cur_loss_positives = cur_loss[cur_positive.bool()]          
         cur_loss_negatives = cur_loss[~cur_positive.bool()]
+        num_neg = num_neg if num_neg < cur_loss_negatives.shape[0] else cur_loss_negatives.shape[0]
         cur_loss_negatives_hard, _ = torch.topk(cur_loss_negatives, num_neg)
 
         mined_loss.append(cur_loss_positives * w_pos)
         mined_loss.append(cur_loss_negatives_hard * w_neg)
     
-    mined_loss = torch.cat([mined_loss], dim=0)
+    mined_loss = torch.cat(mined_loss, dim=0)
     return mined_loss
 
 

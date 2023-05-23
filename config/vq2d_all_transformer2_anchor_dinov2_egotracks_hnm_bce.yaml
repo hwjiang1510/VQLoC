@@ -1,4 +1,4 @@
-exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_lr3_fl_rand2'
+exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_lr3_fl_rand'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
@@ -53,7 +53,7 @@ train:
   resume: True
   batch_size: 3
   total_iteration: 60000
-  lr: 0.0003
+  lr: 0.0001
   weight_decay: 0.005
   schedualr_milestones: [7000, 14000, 20000, 25000]
   schedular_gamma: 0.3

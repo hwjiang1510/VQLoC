@@ -68,7 +68,9 @@ class Task:
             ret_bboxes = ret_bboxes.numpy()     # bbox in [N,4], original resolution, cv2 axis
             ret_scores = ret_scores.numpy()     # scores in [N]
 
-            ret_scores_sm = medfilt(ret_scores, kernel_size=SMOOTHING_SIGMA)
+            ret_scores_sm = ret_scores.copy()
+            for i in range(1):
+                ret_scores_sm = medfilt(ret_scores_sm, kernel_size=SMOOTHING_SIGMA)
 
             # gt_scores = np.zeros_like(ret_scores_sm)
             # len_clip = gt_scores.shape[0]
@@ -80,18 +82,22 @@ class Task:
             peaks, _ = find_peaks(ret_scores_sm)
             if len(peaks) == 0:
                 print(ret_scores_sm)
-            peaks, threshold = process_peaks(peaks, ret_scores_sm)
+            # peaks, threshold = process_peaks(peaks, ret_scores_sm)
+            peaks = process_peaks(peaks, ret_scores_sm)
             #threshold = PEAK_SCORE_THRESHILD
             #threshold = 0.5
 
             recent_peak = None
             for peak in peaks[::-1]:
-                if ret_scores_sm[peak] >= threshold:
-                    recent_peak = peak
-                    break
+                # if ret_scores_sm[peak] >= threshold:
+                #     recent_peak = peak
+                #     break
+                recent_peak = peak
+                break
             #print(recent_peak)
 
             if recent_peak is not None:
+                threshold = ret_scores_sm[recent_peak] * 0.7
                 latest_idx = [recent_peak]
                 for idx in range(recent_peak, 0, -1):
                     if ret_scores_sm[idx] >= threshold:
@@ -121,31 +127,56 @@ class Task:
         return all_pred_rts
 
 
+# def process_peaks(peaks_idx, ret_scores_sm):
+#     '''
+#     process the peaks based on their scores
+#     1. if there are peaks with value larger than PEAK_SCORE_THRESHILD (0.5)
+#         calculate the mean value of them, its PEAK_WINDWOW_RATIO (0.5) time score is the threshold
+#     2. else, do the same on all peaks
+#     '''
+#     num_frames = ret_scores_sm.shape[0]
+#     if len(peaks_idx) == 0:
+#         start_score, end_score = ret_scores_sm[0], ret_scores_sm[-1]
+#         if start_score > end_score:
+#             valid_peaks_idx = [0]
+#         else:
+#             valid_peaks_idx = [num_frames-1]
+
+#     peaks_score = ret_scores_sm[peaks_idx]
+
+#     valid_peaks_idx_idx = np.where(peaks_score > PEAK_SCORE_THRESHILD)[0]
+#     valid_peaks_idx = peaks_idx[valid_peaks_idx_idx]
+
+#     if valid_peaks_idx.shape[0] > 0:
+#         valid_peaks_score = peaks_score[valid_peaks_idx_idx]
+#         threshold = np.mean(valid_peaks_score) * PEAK_WINDWOW_RATIO
+#         new_peaks_idx = valid_peaks_idx
+#     else:
+#         threshold = np.mean(peaks_score) * PEAK_WINDWOW_RATIO
+#         new_peaks_idx = peaks_idx
+#     return new_peaks_idx, threshold
+
 def process_peaks(peaks_idx, ret_scores_sm):
     '''
     process the peaks based on their scores
     1. if there are peaks with value larger than PEAK_SCORE_THRESHILD (0.5)
-        calculate the mean value of them, its PEAK_WINDWOW_RATIO (0.6) time score is the threshold
+        calculate the mean value of them, its PEAK_WINDWOW_RATIO (0.5) time score is the threshold
     2. else, do the same on all peaks
     '''
     num_frames = ret_scores_sm.shape[0]
     if len(peaks_idx) == 0:
         start_score, end_score = ret_scores_sm[0], ret_scores_sm[-1]
         if start_score > end_score:
-            peaks = [0]
+            valid_peaks_idx = [0]
         else:
-            peaks = [num_frames-1]
-
-    peaks_score = ret_scores_sm[peaks_idx]
-
-    valid_peaks_idx_idx = np.where(peaks_score > PEAK_SCORE_THRESHILD)[0]
-    valid_peaks_idx = peaks_idx[valid_peaks_idx_idx]
-
-    if valid_peaks_idx.shape[0] > 0:
-        valid_peaks_score = peaks_score[valid_peaks_idx_idx]
-        threshold = np.mean(valid_peaks_score) * PEAK_WINDWOW_RATIO
-        new_peaks_idx = valid_peaks_idx
+            valid_peaks_idx = [num_frames-1]
     else:
-        threshold = np.mean(peaks_score) * PEAK_WINDWOW_RATIO
-        new_peaks_idx = peaks_idx
-    return new_peaks_idx, threshold
+        peaks_score = ret_scores_sm[peaks_idx]
+        largest_score = np.max(peaks_score)
+
+        threshold = largest_score * 0.8
+
+        valid_peaks_idx_idx = np.where(peaks_score > threshold)[0]
+        valid_peaks_idx = peaks_idx[valid_peaks_idx_idx]
+    return valid_peaks_idx
+

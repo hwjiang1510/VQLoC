@@ -185,12 +185,15 @@ class EgoTracksDataset(QueryVideoDataset):
         clip_with_bbox, clip_bbox = self._get_clip_bbox(sample, clip_idxs)
 
         # clip with square shape, bbox processed accordingly
-        clip, clip_bbox, query, clip_h, clip_w = self._process_clip(clip, clip_bbox, clip_with_bbox)
+        clip, clip_bbox, clip_with_bbox, query, clip_h, clip_w = self._process_clip(clip, clip_bbox, clip_with_bbox)
 
         # load query image
         query_canonical = self._get_query(sample, query_path)
         #if self.split != 'train' or (not torch.is_tensor(query)):
         query = query_canonical.clone()
+
+        # load original query frame and the bbox
+        query_frame, query_frame_bbox = self._get_query_frame(sample, query_path)
 
         results = {
             'clip': clip.float(),                           # [T,3,H,W]
@@ -200,6 +203,8 @@ class EgoTracksDataset(QueryVideoDataset):
             'query': query.float(),                         # [3,H2,W2]
             'clip_h': torch.tensor(clip_h),
             'clip_w': torch.tensor(clip_w),
+            'query_frame': query_frame.float(),             # [3,H,W]
+            'query_frame_bbox': query_frame_bbox.float()    # [4]
         }
         return results
 

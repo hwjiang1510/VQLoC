@@ -175,7 +175,7 @@ class QueryVideoDataset(Dataset):
         if (anno_height, anno_width) != (height, width):
             query = query.resize((anno_width, anno_height))
             width, height = anno_width, anno_height
-        # load bounding box
+        # load bounding box, to get VQ crop
         bbox = get_bbox_from_data(sample["visual_crop"])     # BoxMode.XYXY_ABS, for crop only
         if self.query_params['query_square']:
             bbox = dataset_utils.bbox_cv2Totorch(torch.tensor(bbox))
@@ -207,6 +207,41 @@ class QueryVideoDataset(Dataset):
         return query
     
 
+    def _get_query_frame(self, sample, query_path):
+        target_size = self.clip_params['fine_size']
+        query = Image.open(query_path)
+        width, height = query.size
+        # validate image size
+        anno_width = sample["visual_crop"]["original_width"]
+        anno_height = sample["visual_crop"]["original_height"]
+        if (anno_height, anno_width) != (height, width):
+            query = query.resize((anno_width, anno_height))
+            width, height = anno_width, anno_height
+        # load bounding box, to get VQ crop
+        bbox = get_bbox_from_data(sample["visual_crop"])     # BoxMode.XYXY_ABS, [4]
+        bbox = dataset_utils.bbox_cv2Totorch(torch.tensor(bbox))
+        if self.query_params['query_square']:
+            bbox = dataset_utils.create_square_bbox(bbox, height, width)
+        w, h = query.size
+        max_size, min_size = max(h, w), min(h, w)
+        pad_height = True if h < w else False
+        pad_size = (max_size - min_size) // 2
+        if pad_height:
+            pad_input = [0, pad_size] * 2                   # for the left, top, right and bottom borders respectively
+            bbox[0] += (max_size - min_size) / 2.0   # in padded image size
+            bbox[2] += (max_size - min_size) / 2.0
+        else:
+            pad_input = [pad_size, 0] * 2
+            bbox[1] += (max_size - min_size) / 2.0
+            bbox[3] += (max_size - min_size) / 2.0  
+        transform_pad = transforms.Pad(pad_input, fill=self.padding_value)
+        query = transform_pad(query)        # square image
+        query = query.resize((target_size, target_size))
+        query = torch.from_numpy(np.asarray(query) / 255.0).permute(2,0,1)  # RGB, [C,H,W]
+        bbox = bbox / float(max_size)                # in range [0,1]
+        return query, bbox
+    
+
     def _get_query_train(self, clip, clip_bbox, clip_with_bbox, query_canonical):
         '''
         clip: [T,3,H,W], value range [0,1]
@@ -230,6 +265,28 @@ class QueryVideoDataset(Dataset):
         # except:
         #     query = query_canonical
         return query
+    
+    def _process_bbox(self, clip_bbox, clip_with_bbox, min_size=0.05, max_ratio=2.5):
+        '''
+        clip_bbox in shape [T,4], value within [0,1], xyxy in torch coordinate
+        clip_with_bbox in shape [T], float
+        '''
+        T = clip_bbox.shape[0]
+        min_ratio = 1 / max_ratio
+
+        clip_bbox_h = clip_bbox[:,2] - clip_bbox[:,0]   # [T]
+        clip_bbox_w = clip_bbox[:,3] - clip_bbox[:,1]   # [T]
+
+        # clean the annotation by bbox size
+        clip_with_bbox *= (clip_bbox_w > min_size).float()
+        clip_with_bbox *= (clip_bbox_h > min_size).float()
+
+        # clean the annotation by bbox width
+        clip_bbox_ratio = clip_bbox_h / clip_bbox_w
+        clip_with_bbox *= (clip_bbox_ratio < max_ratio).float()
+        clip_with_bbox *= (clip_bbox_ratio > min_ratio).float()
+
+        return clip_bbox, clip_with_bbox
     
 
     def _process_clip(self, clip, clip_bbox, clip_with_bbox):
@@ -273,7 +330,10 @@ class QueryVideoDataset(Dataset):
         h_pad, w_pad = clip.shape[-2:]
         clip = F.interpolate(clip, size=(target_size, target_size), mode='bilinear')#.squeeze(0)
         clip_bbox = clip_bbox / float(h_pad)                # in range [0,1]
-        return clip, clip_bbox, query, h, w
+
+        # if self.split == 'train':
+        #     clip_bbox, clip_with_bbox = self._process_bbox(clip_bbox, clip_with_bbox)
+        return clip, clip_bbox, clip_with_bbox, query, h, w
 
     def __len__(self):
         return len(self.annotations)
@@ -311,12 +371,15 @@ class QueryVideoDataset(Dataset):
         clip_with_bbox, clip_bbox = self._get_clip_bbox(sample, clip_idxs)
 
         # clip with square shape, bbox processed accordingly
-        clip, clip_bbox, query, clip_h, clip_w = self._process_clip(clip, clip_bbox, clip_with_bbox)
+        clip, clip_bbox, clip_with_bbox, query, clip_h, clip_w = self._process_clip(clip, clip_bbox, clip_with_bbox)
 
         # load query image
         query_canonical = self._get_query(sample, query_path)
         #if self.split != 'train' or (not torch.is_tensor(query)):
         query = query_canonical.clone()
+
+        # load original query frame and the bbox
+        query_frame, query_frame_bbox = self._get_query_frame(sample, query_path)
 
         results = {
             'clip': clip.float(),                           # [T,3,H,W]
@@ -326,6 +389,8 @@ class QueryVideoDataset(Dataset):
             'query': query.float(),                         # [3,H2,W2]
             'clip_h': torch.tensor(clip_h),
             'clip_w': torch.tensor(clip_w),
+            'query_frame': query_frame.float(),             # [3,H,W]
+            'query_frame_bbox': query_frame_bbox.float()    # [4]
         }
         return results
     
@@ -340,7 +405,7 @@ def sample_frames_balance(num_frames, query_frame, frame_interval, sample, sampl
         sample: data annotations
         sampling: only effective for frame_interval larger than 1
     return: 
-        frame_idxs: length [2*num_frames]
+        frame_idxs: length [num_frames]
     '''
     required_len = (num_frames - 1) * frame_interval + 1
     anno_valid_idx_range = sample["response_track_valid_range"]

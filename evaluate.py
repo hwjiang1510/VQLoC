@@ -151,7 +151,8 @@ def evaluate(gt_file, pred_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gt-file", required=False, type=str, default='/vision/hwjiang/episodic-memory/VQ2D/data/vq_val.json')
-    parser.add_argument("--pred-file", required=False, type=str, default='/vision/hwjiang/vq2d/output/ego4d_vq2d/vq2d_all_transformer2_anchor_dinov2_inference_egotracks/default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_egotrack_fix-assign_res16_inference/inference_cache_val_results.json.gz')
+    #parser.add_argument("--pred-file", required=False, type=str, default='/vision/hwjiang/vq2d/output/ego4d_vq2d/vq2d_all_transformer2_anchor_dinov2_inference_egotracks/default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_lr3/inference_cache_val_results.json.gz')
+    parser.add_argument("--pred-file", required=False, type=str, default='/vision/hwjiang/vq2d/output/baselines/val_predictions_pst_0.25_lost_thresh_0.20.json')
     parser.add_argument("--eval", dest="eval", action="store_true", help="evaluate model")
     args = parser.parse_args()
     if args.eval:

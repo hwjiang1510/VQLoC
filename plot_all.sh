@@ -1,0 +1,10 @@
+python plot_all.py --exp_id 0 --split 10 &
+python plot_all.py --exp_id 1 --split 10 &
+python plot_all.py --exp_id 2 --split 10 &
+python plot_all.py --exp_id 3 --split 10 &
+python plot_all.py --exp_id 4 --split 10 &
+python plot_all.py --exp_id 5 --split 10 &
+python plot_all.py --exp_id 6 --split 10 &
+python plot_all.py --exp_id 7 --split 10 &
+python plot_all.py --exp_id 8 --split 10 &
+python plot_all.py --exp_id 9 --split 10 &
