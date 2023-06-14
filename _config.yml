@@ -21,7 +21,7 @@
 title: VQLoC
 email: hwjiang@utexas.edu
 description: >- # this means to ignore newlines until "baseurl:"
-  Website for paper "Few-View Object Reconstruction with Unknown Categories and Camera Poses"
+  Website for paper "Single-stage Visual Query Localization in Egocentric Videos"
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
 github_username: hwjiang1510

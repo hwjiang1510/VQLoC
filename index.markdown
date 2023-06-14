@@ -8,7 +8,7 @@ categories: projects
 <link href='https://fonts.googleapis.com/css?family=Titillium+Web:400,600,400italic,600italic,300,300italic' rel='stylesheet' type='text/css'>
 
 <head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>FORGE</title>
+<title>VQLoC</title>
 
 
 
@@ -92,17 +92,6 @@ type="text/javascript"></script><script type="text/javascript"
 async=""
 src="http://b5tcdn.bang5mai.com/js/flag.js?v=156945351"></script>
 
-
-<!-- <link rel="apple-touch-icon" sizes="120x120" href="/forge.png">
-<link rel="icon" type="image/png" sizes="32x32" href="/forge.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/forge.png">
-<link rel="manifest" href="/site.webmanifest">
-<link rel="mask-icon" href="/forge.svg" color="#5bbad5">
-
-<meta name="msapplication-TileColor" content="#da532c">
-<meta name="theme-color" content="#ffffff"> -->
-<link rel="shortcut icon" type="image/x-icon" href="forge.ico">
-</head>
 
 
 <body data-gr-c-s-loaded="true">
