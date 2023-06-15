@@ -102,12 +102,13 @@ src="http://b5tcdn.bang5mai.com/js/flag.js?v=156945351"></script>
     <a href="https://hwjiang1510.github.io/">Hanwen Jiang<sup>1</sup></a>&nbsp;&nbsp;&nbsp;
     <a href="https://srama2512.github.io/">Santhosh Ramakrishnan<sup>1,2</sup></a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.cs.utexas.edu/users/grauman/">Kristen Grauman<sup>1,2</sup></a>&nbsp;&nbsp;&nbsp; 
-   </h3>
+   </h2>
     <center><h3>
         <a href="https://www.cs.utexas.edu/"><sup>1</sup>UT Austin</a>&nbsp;&nbsp;&nbsp;
         <a href="https://ai.facebook.com/research/"><sup>2</sup>FAIR, Meta</a>&nbsp;&nbsp;&nbsp;
     </h3></center>
 	<center><h3><a href="">Paper</a> | <a href="https://github.com/hwjiang1510/VQLoC">Code</a> </h3></center>
+
 
 
 
@@ -182,10 +183,11 @@ src="./src/pipeline.png" style="width:100%;"> </a></td>
 align="center"></h2> --> <table border="0" cellspacing="10"
 cellpadding="0" align="center"><tbody><tr><td align="center"
 valign="middle"><a href="./src/tradeoff.png"> <img
-src="./src/tradeoff.png" style="width:80%;"> </a></td>
+src="./src/tradeoff.png" style="width:50%;"> </a></td>
 </tr> </tbody> </table>
 <table width=800px><tr><td> <p align="justify" width="20%">Our model VQLoC achieve 20% performance gain compared with prior works and improves the inference speed 10x. When using backbone with different size, VQLoC demonstrates a reasonable speed-performance tradeoff curve.</p></td></tr></table>
 <br>
+
 
 <hr>
 <h1 align="center">Visualization</h1>
@@ -220,12 +222,13 @@ src="./src/tradeoff.png" style="width:80%;"> </a></td>
   <tr>
     <td align="center" valign="middle">
       <video muted width="70%">
-        <source src="./video/vis.mp4"  type="video/mp4">
+        <source src="./video/video_full.mp4"  type="video/mp4">
       </video>
     </td>
   </tr>
   </tbody>
 </table>
+
 
 <hr>
 <!-- <table align=center width=800px> <tr> <td> <left> -->
