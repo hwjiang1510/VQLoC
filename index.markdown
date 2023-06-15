@@ -103,11 +103,12 @@ src="http://b5tcdn.bang5mai.com/js/flag.js?v=156945351"></script>
     <a href="https://srama2512.github.io/">Santhosh Ramakrishnan<sup>1,2</sup></a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.cs.utexas.edu/users/grauman/">Kristen Grauman<sup>1,2</sup></a>&nbsp;&nbsp;&nbsp; 
    </h2>
-    <center><h3>
+    <center><h2>
         <a href="https://www.cs.utexas.edu/"><sup>1</sup>UT Austin</a>&nbsp;&nbsp;&nbsp;
         <a href="https://ai.facebook.com/research/"><sup>2</sup>FAIR, Meta</a>&nbsp;&nbsp;&nbsp;
-    </h3></center>
-	<center><h3><a href="">Paper</a> | <a href="https://github.com/hwjiang1510/VQLoC">Code</a> </h3></center>
+    </h2></center>
+	<center><h2><a href="">Paper</a> | <a href="https://github.com/hwjiang1510/VQLoC">Code</a> </h2></center>
+
 
 
 
@@ -215,19 +216,21 @@ src="./src/tradeoff.png" style="width:50%;"> </a></td>
 
 
 
-<hr>
 <h1 align="center">Video</h1>
 <table border="0" cellspacing="10" cellpadding="0" align="center">
   <tbody>
-  <tr>
-    <td align="center" valign="middle">
-      <video muted width="70%">
-        <source src="./video/video_full.mp4"  type="video/mp4">
-      </video>
-    </td>
-  </tr>
+    <tr>
+      <td align="center" valign="middle">
+        <video muted="" controls="" width="100%">
+          <source src="./video/video_full.mp4"  type="video/mp4" />
+        </video>
+      </td>
+    </tr>
   </tbody>
 </table>
+
+
+
 
 
 <hr>
