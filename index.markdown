@@ -100,14 +100,16 @@ src="http://b5tcdn.bang5mai.com/js/flag.js?v=156945351"></script>
 <center><h1><strong><br>Single-Stage Visual Query Localization <br /> in Egocentric Videos</strong></h1></center>
 <center><h2>
     <a href="https://hwjiang1510.github.io/">Hanwen Jiang<sup>1</sup></a>&nbsp;&nbsp;&nbsp;
-    <a href="https://srama2512.github.io/">Santhosh Ramakrishnan<sup>1,2</sup></a>&nbsp;&nbsp;&nbsp;
+    <a href="https://srama2512.github.io/">Santhosh Ramakrishnan<sup>1</sup></a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.cs.utexas.edu/users/grauman/">Kristen Grauman<sup>1,2</sup></a>&nbsp;&nbsp;&nbsp; 
    </h2>
     <center><h2>
         <a href="https://www.cs.utexas.edu/"><sup>1</sup>UT Austin</a>&nbsp;&nbsp;&nbsp;
         <a href="https://ai.facebook.com/research/"><sup>2</sup>FAIR, Meta</a>&nbsp;&nbsp;&nbsp;
     </h2></center>
-	<center><h2><a href="">Paper</a> | <a href="https://github.com/hwjiang1510/VQLoC">Code</a> </h2></center>
+	<center><h2><a href="https://arxiv.org/abs/2306.09324">Paper</a> | <a href="https://github.com/hwjiang1510/VQLoC">Code</a> </h2></center>
+
+
 
 
 
@@ -246,7 +248,7 @@ src="./src/tradeoff.png" style="width:50%;"> </a></td>
    author={Jiang, Hanwen and Ramakrishnan, Santhosh and Grauman, Kristen},
    journal={ArXiv},
    year={2023},
-   volume={}
+   volume={2306.09324}
 }
 </code></pre>
 </left></td></tr></table>
