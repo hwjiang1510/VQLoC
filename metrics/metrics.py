@@ -66,6 +66,7 @@ def compute_visual_query_metrics(
         rt_areas.append(area)
     rt_areas = np.array(rt_areas)
 
+    num_valid = 0
     # Calculate metrics for each vc_rt_pairing
     pair_metrics = OrderedDict()
     for pair_name, (vc_cat, rt_cat) in vc_rt_pairings.items():
@@ -78,6 +79,7 @@ def compute_visual_query_metrics(
             & (rt_areas >= rt_range[0])
             & (rt_areas < rt_range[1])
         )
+        num_valid += mask.sum()
         # Ignore pairing if there are not valid data points
         if np.count_nonzero(mask) == 0:
             continue
@@ -99,5 +101,5 @@ def compute_visual_query_metrics(
                 1 - np.array(acc_frames).astype(np.float32) / np.array(tot_frames)
             ).mean() * 100.0
         pair_metrics[pair_name] = metrics
-
+    print(num_valid)
     return pair_metrics

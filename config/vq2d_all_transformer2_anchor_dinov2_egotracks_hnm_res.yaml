@@ -1,4 +1,4 @@
-exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_lr3_fl_rand2_rebuttal'
+exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_lr3_fl_rand_res'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
 log_dir: './log'
@@ -12,9 +12,9 @@ seed: 42
 dataset:
   name: 'ego4d_egotracks'
   name_val: 'ego4d_egotracks'
-  query_size: 448
-  clip_size_fine: 448
-  clip_size_coarse: 448
+  query_size: 512
+  clip_size_fine: 512
+  clip_size_coarse: 512
   clip_num_frames: 30
   clip_num_frames_val: 30
   clip_sampling: 'rand'
@@ -26,10 +26,10 @@ dataset:
 
 # model config
 model:
-  backbone_name: 'dinov2'
-  backbone_type: 'vitb14'
+  backbone_name: 'resnet'
+  backbone_type: 'resnet50'
   bakcbone_use_mae_weight: False
-  fix_backbone: True
+  fix_backbone: False
   num_transformer: 3
   type_transformer: 'global'
   resolution_transformer: 8
@@ -50,8 +50,8 @@ loss:
 
 # training config
 train:
-  resume: True
-  batch_size: 3
+  resume: False
+  batch_size: 2
   total_iteration: 60000
   lr: 0.0003
   weight_decay: 0.005

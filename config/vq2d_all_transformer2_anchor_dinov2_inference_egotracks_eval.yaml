@@ -1,7 +1,7 @@
 #exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_hnm_fl_rand'
 #exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.2_fix-assign_egotracks_hnm_inference'
 #exp_name: 'default-arch_aug-no_anchor_focal-w10_2heads_dropout0.2_positive0.3_fix-assign-no_egotracks_hnm_inference'
-exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_lr3'
+exp_name: 'default-arch_aug-clip_anchor_focal-w10_2heads_drop0.2_pos0.2_fix-assign-res16_egotracks_lr3——2'
 #exp_name: 'stark'
 exp_group: 'vq2d_transformer_all_dinov2'
 output_dir: './output/'
