@@ -48,8 +48,6 @@ def get_losses_with_anchor(config, preds, gts):
         positive[:1] = True
     loss_mask = positive.float().unsqueeze(1)                                    # [b*t*N,1]
 
-    #print(positive.sum().item(), torch.ones_like(positive).sum().item(), gt_prob.unsqueeze(-1).repeat(1,1,N).sum().item())
-    
     # anchor box regression loss
     if torch.sum(positive.float()).item() > 0:
         # bbox center loss
@@ -208,7 +206,7 @@ def get_losses(config, preds, gts):
         'weight_bbox_hw': config.loss.weight_bbox_hw,
         'weight_bbox_giou': config.loss.weight_bbox_giou,
         'weight_prob': config.loss.weight_prob,
-        # informations
+        # information
         'iou': iou.detach(),
         'giou': giou.detach()
     }
@@ -326,11 +324,6 @@ def BCELogitsLoss_with_HNM(pred_prob, gt_prob, positive, gt_before_query, weight
     gt_prob = rearrange(gt_prob, 'b t N -> (b t N)')                                    # [b*t*N]
     BCE_loss = F.binary_cross_entropy_with_logits(pred_prob, gt_prob, reduction='none') # [b*t*N]
 
-    # pred_prob = rearrange(pred_prob, '(b t N) -> (b t) N', b=b, t=t)
-    # gt_prob = rearrange(gt_prob, '(b t N) -> (b t) N', b=b, t=t)
-    # BCE_loss = rearrange(BCE_loss, '(b t N) -> (b t) N', b=b, t=t)
-    # positive = rearrange(positive, '(b t N) -> (b t) N', b=b, t=t)
-    # gt_before_query = rearrange(gt_before_query, 'b t -> (b t)', b=b, t=t)
     pred_prob = rearrange(pred_prob, '(b t N) -> b t N', b=b, t=t)
     gt_prob = rearrange(gt_prob, '(b t N) -> b t N', b=b, t=t)
     BCE_loss = rearrange(BCE_loss, '(b t N) -> b t N', b=b, t=t)
@@ -382,60 +375,6 @@ def HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query, weigh
     
     mined_loss = torch.cat(mined_loss, dim=0)
     return mined_loss
-
-
-
-# def HardNegMining(pred_prob, gt_prob, positive, BCE_loss, gt_before_query, weight, ratio_neg_pos=3., ratio_hard=0.05):
-#     '''
-#     Perform frame-level hard negative mining
-#     Params:
-#         ratio_neg_pos: negative / positive ratio
-#         ratio_hard: ratio of negatives from all anchors if no positive anchor is assigned
-#         pred_prob, gt_prob, positive, BCE_loss in [B,N], B=b*t
-#         gt_before_query: in [B]
-#         weight: weights for positive and negative predictions
-#     Mine the anchor boxes with three type:
-#         1. query object doesn't occur and no anchor is assigned as positive
-#         2. query object occurs and some anchors are assigned as positive
-#         3. query object occurs but no anchor is assigned as positive
-#     '''
-#     # N = 16*16*12 or 8*8*12
-#     B, N = pred_prob.shape
-#     w_pos, w_neg = weight
-
-#     pred_prob = pred_prob[gt_before_query.bool()]    # [B',N], reject unreliable annotations after query frame
-#     gt_prob = gt_prob[gt_before_query.bool()]
-#     positive = positive[gt_before_query.bool()]
-#     BCE_loss = BCE_loss[gt_before_query.bool()]
-#     B = pred_prob.shape[0]
-
-#     mined_loss = []
-#     for i in range(B):
-#         cur_prob = pred_prob[i][gt_before_query.bool()]         # [N], for all anchor box in the frame
-#         cur_prob_gt = gt_prob[i][gt_before_query.bool()]        # [N]
-#         cur_positive = positive[i][gt_before_query.bool()]      # [N]
-#         cur_loss = BCE_loss[i][gt_before_query.bool()]          # [N]
-
-#         cur_loss_positives = cur_loss[cur_positive.bool()]
-#         cur_loss_negatives = cur_loss[~cur_positive.bool()]
-
-#         if cur_prob_gt.any() and cur_positive.any():
-#             # case 2
-#             num_positives = int(cur_positive.sum().item())
-#             num_negatives = int(num_positives * ratio_neg_pos)
-#             cur_loss_negatives_hard, hard_neg_idxs = torch.topk(cur_loss_negatives, num_negatives)
-#             mined_loss.append(cur_loss_negatives_hard * w_neg)
-#             mined_loss.append(cur_loss_positives * w_pos)
-#         else:
-#             # case 1 and 3
-#             num_negatives = int(N * ratio_hard)
-#             cur_loss_hard, hard_idxs = torch.topk(cur_loss, num_negatives)
-#             mined_loss.append(cur_loss_hard * w_neg)
-    
-#     mined_loss = torch.cat(mined_loss, dim=0)
-#     return mined_loss
-
-
 
 
 

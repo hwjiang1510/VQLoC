@@ -2,7 +2,6 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 from model.transformer import Block
-#from model.local_transformer import Block_local
 from utils.model_utils import PositionalEncoding1D, positionalencoding1d, positionalencoding3d, positionalencoding2d
 from utils.model_utils import BasicBlock_Conv2D, BasicBlock_MLP
 from utils.anchor_utils import generate_anchor_boxes_on_regions

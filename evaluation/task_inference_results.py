@@ -19,8 +19,11 @@ SMOOTHING_SIGMA = 5
 DISTANCE = 25
 WIDTH = 3
 PROMINENCE = 0.2
-PEAK_SCORE_THRESHILD = 0.5
+PEAK_SCORE_THRESHILD = 0.5  
 PEAK_WINDWOW_RATIO = 0.5
+
+PEAK_SCORE_THRESHOLD = 0.8
+PEAK_WINDOW_THRESHOLD = 0.7
 
 
 class Task:
@@ -72,6 +75,7 @@ class Task:
             for i in range(1):
                 ret_scores_sm = medfilt(ret_scores_sm, kernel_size=SMOOTHING_SIGMA)
 
+            # only used for testing stAP with gt window 
             # gt_scores = np.zeros_like(ret_scores_sm)
             # len_clip = gt_scores.shape[0]
             # gt_rt_idx = [int(frame_it['frame_number']) for frame_it in annot['response_track']]
@@ -82,22 +86,15 @@ class Task:
             peaks, _ = find_peaks(ret_scores_sm)
             if len(peaks) == 0:
                 print(ret_scores_sm)
-            # peaks, threshold = process_peaks(peaks, ret_scores_sm)
             peaks = process_peaks(peaks, ret_scores_sm)
-            #threshold = PEAK_SCORE_THRESHILD
-            #threshold = 0.5
 
             recent_peak = None
             for peak in peaks[::-1]:
-                # if ret_scores_sm[peak] >= threshold:
-                #     recent_peak = peak
-                #     break
                 recent_peak = peak
                 break
-            #print(recent_peak)
 
             if recent_peak is not None:
-                threshold = ret_scores_sm[recent_peak] * 0.7
+                threshold = ret_scores_sm[recent_peak] * PEAK_WINDOW_THRESHOLD
                 latest_idx = [recent_peak]
                 for idx in range(recent_peak, 0, -1):
                     if ret_scores_sm[idx] >= threshold:
@@ -127,42 +124,8 @@ class Task:
         return all_pred_rts
 
 
-# def process_peaks(peaks_idx, ret_scores_sm):
-#     '''
-#     process the peaks based on their scores
-#     1. if there are peaks with value larger than PEAK_SCORE_THRESHILD (0.5)
-#         calculate the mean value of them, its PEAK_WINDWOW_RATIO (0.5) time score is the threshold
-#     2. else, do the same on all peaks
-#     '''
-#     num_frames = ret_scores_sm.shape[0]
-#     if len(peaks_idx) == 0:
-#         start_score, end_score = ret_scores_sm[0], ret_scores_sm[-1]
-#         if start_score > end_score:
-#             valid_peaks_idx = [0]
-#         else:
-#             valid_peaks_idx = [num_frames-1]
-
-#     peaks_score = ret_scores_sm[peaks_idx]
-
-#     valid_peaks_idx_idx = np.where(peaks_score > PEAK_SCORE_THRESHILD)[0]
-#     valid_peaks_idx = peaks_idx[valid_peaks_idx_idx]
-
-#     if valid_peaks_idx.shape[0] > 0:
-#         valid_peaks_score = peaks_score[valid_peaks_idx_idx]
-#         threshold = np.mean(valid_peaks_score) * PEAK_WINDWOW_RATIO
-#         new_peaks_idx = valid_peaks_idx
-#     else:
-#         threshold = np.mean(peaks_score) * PEAK_WINDWOW_RATIO
-#         new_peaks_idx = peaks_idx
-#     return new_peaks_idx, threshold
-
 def process_peaks(peaks_idx, ret_scores_sm):
-    '''
-    process the peaks based on their scores
-    1. if there are peaks with value larger than PEAK_SCORE_THRESHILD (0.5)
-        calculate the mean value of them, its PEAK_WINDWOW_RATIO (0.5) time score is the threshold
-    2. else, do the same on all peaks
-    '''
+    '''process the peaks based on their scores'''
     num_frames = ret_scores_sm.shape[0]
     if len(peaks_idx) == 0:
         start_score, end_score = ret_scores_sm[0], ret_scores_sm[-1]
@@ -174,7 +137,7 @@ def process_peaks(peaks_idx, ret_scores_sm):
         peaks_score = ret_scores_sm[peaks_idx]
         largest_score = np.max(peaks_score)
 
-        threshold = largest_score * 0.8
+        threshold = largest_score * PEAK_SCORE_THRESHOLD
 
         valid_peaks_idx_idx = np.where(peaks_score > threshold)[0]
         valid_peaks_idx = peaks_idx[valid_peaks_idx_idx]
