@@ -1,4 +1,4 @@
-# Single-Stage Visual Query Localization in Egocentric Videos
+# Single-Stage Visual Query Localization in Egocentric Videos (NeurIPS 2023)
 
 ### [Project Page](https://hwjiang1510.github.io/VQLoC/) |  [Paper](https://arxiv.org/abs/2306.09324)
 <br/>
