@@ -2,7 +2,7 @@ exp_name: 'eval'
 exp_group: 'vq2d'
 output_dir: './output/'
 log_dir: './log'
-workers: 8
+workers: 0
 print_freq: 100
 vis_freq: 1000
 eval_vis_freq: 100
@@ -37,7 +37,7 @@ model:
   window_transformer: 5
   positive_threshold: 0.3
   # best checkpoint
-  cpt_path: 'CPT_PATH/cpt_best_prob.pth.tar'
+  cpt_path: '3j3q9qsc1kovpwfxtnsful7pvdy234q6.tar'
 
 # loss config
 loss:
@@ -51,7 +51,7 @@ loss:
 # training config
 train:
   resume: True
-  batch_size: 4
+  batch_size: 1
   total_iteration: 60000
   lr: 0.0001
   weight_decay: 0.005

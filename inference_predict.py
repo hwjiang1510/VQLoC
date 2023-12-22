@@ -10,6 +10,7 @@ import argparse
 import json
 import tqdm
 from queue import Empty as QueueEmpty
+import time
 
 import torch.utils.data
 import torch.utils.data.distributed
@@ -31,7 +32,8 @@ class WorkerWithDevice(mp.Process):
         super().__init__(target=self.work, args=(task_queue, results_queue))
 
     def work(self, task_queue, results_queue):
-
+        # print(torch.cuda.memory_summary())
+        # print("before load ckpt")
         device = torch.device(f"cuda:{self.device_id}")
 
         model = ClipMatcher(self.config).to(device)
@@ -39,7 +41,12 @@ class WorkerWithDevice(mp.Process):
         checkpoint = torch.load(self.config.model.cpt_path, map_location='cpu')
         model.load_state_dict(checkpoint["state_dict"], strict=True)
         model.eval()
+        # print(torch.cuda.memory_summary())
+        # print("before delete ckpt")
         del checkpoint
+        # print(torch.cuda.memory_summary())
+        # print("after delete ckpt")
+
 
         while True:
             try:
@@ -55,7 +62,6 @@ class WorkerWithDevice(mp.Process):
 def perform_vq2d_inference(annotations, config):
     num_gpus = torch.cuda.device_count()
     mp.set_start_method("forkserver")
-
     task_queue = mp.Queue()
     for _, annots in annotations.items():
         task = Task(config, annots)
@@ -121,7 +127,8 @@ if __name__ == '__main__':
     random.seed(config.seed)
 
     mode = 'test_unannotated' if args.eval else 'val'
-    annotation_path = os.path.join('/vision/hwjiang/episodic-memory/VQ2D/data', 'vq_{}.json'.format(mode))
+    # annotation_path = os.path.join('/vision/hwjiang/episodic-memory/VQ2D/data', 'vq_{}.json'.format(mode))
+    annotation_path = os.path.join('../dlcv/DLCV_vq2d_data/', 'vq_{}.json'.format(mode))
     with open(annotation_path) as fp:
         annotations = json.load(fp)
     clipwise_annotations_list = eval_utils.convert_annotations_to_clipwise_list(annotations)

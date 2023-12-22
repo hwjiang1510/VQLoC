@@ -25,7 +25,8 @@ class Task:
             (annot["metadata"]["annotation_uid"], annot["metadata"]["query_set"])
             for annot in self.annots
         ]
-        self.clip_dir = '/vision/srama/Research/Ego4D/episodic-memory/VQ2D/data/clips_fullres'
+        # self.clip_dir = '/vision/srama/Research/Ego4D/episodic-memory/VQ2D/data/clips_fullres'
+        self.clip_dir = '../dlcv/DLCV_vq2d_data/clips'
 
     def run(self, model, config, device):
         clip_uid = self.annots[0]["clip_uid"]
