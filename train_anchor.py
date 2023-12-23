@@ -59,24 +59,24 @@ def main():
     local_rank = dist.get_rank()
     torch.cuda.set_device(local_rank)
 
-    if local_rank == 0:
-        wandb_name = config.exp_name
-        wandb_proj_name = config.exp_group
-        wandb_run = wandb.init(project=wandb_proj_name, group=wandb_name)#, name='smooth-puddle-94', resume=True)
-        wandb.config.update({
-            "exp_name": config.exp_name,
-            "batch_size": config.train.batch_size,
-            "total_iteration": config.train.total_iteration,
-            "lr": config.train.lr,
-            "weight_decay": config.train.weight_decay,
-            "loss_weight_bbox_giou": config.loss.weight_bbox_giou,
-            "loss_prob_bce_weight": config.loss.prob_bce_weight,
-            "model_num_transformer": config.model.num_transformer,
-            "model_resolution_transformer": config.model.resolution_transformer,
-            "model_window_transformer": config.model.window_transformer,
-        })
-    else:
-        wandb_run = None
+    # if local_rank == 0:
+    #     wandb_name = config.exp_name
+    #     wandb_proj_name = config.exp_group
+    #     wandb_run = wandb.init(project=wandb_proj_name, group=wandb_name)#, name='smooth-puddle-94', resume=True)
+    #     wandb.config.update({
+    #         "exp_name": config.exp_name,
+    #         "batch_size": config.train.batch_size,
+    #         "total_iteration": config.train.total_iteration,
+    #         "lr": config.train.lr,
+    #         "weight_decay": config.train.weight_decay,
+    #         "loss_weight_bbox_giou": config.loss.weight_bbox_giou,
+    #         "loss_prob_bce_weight": config.loss.prob_bce_weight,
+    #         "model_num_transformer": config.model.num_transformer,
+    #         "model_resolution_transformer": config.model.resolution_transformer,
+    #         "model_window_transformer": config.model.window_transformer,
+    #     })
+    # else:
+    wandb_run = None
 
     # get model
     model = ClipMatcher(config).to(device)

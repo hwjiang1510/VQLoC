@@ -56,6 +56,12 @@ def get_dataset(config, split='train'):
             dataset_name=dataset_name,
             query_params=query_params,
             clip_params=clip_params,
+            # data_dir='../Meta/data',
+            # clip_dir='../Meta/DLCV_vq2d_data/clips',
+            # meta_dir='../Meta/DLCV_vq2d_data',
+            data_dir=config.data_dir,
+            clip_dir=config.clip_dir,
+            meta_dir=config.meta_dir,
             split=split,
             clip_reader=clip_reader
         )

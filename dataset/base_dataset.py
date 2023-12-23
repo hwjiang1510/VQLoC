@@ -130,9 +130,10 @@ class QueryVideoDataset(Dataset):
     
 
     def _get_query_path(self, sample):
-        clip_name = sample['clip_uid']
+        clip_name = sample['clip_uid'] + '-' + sample['query_set']
         image_name = int(sample["visual_crop"]["frame_number"])# "{}/frame_{:07d}.jpg"
-        image_path = os.path.join(self.data_dir, 'images_hw', "{}/frame_{:07d}.jpg".format(clip_name, image_name + 1))
+        # image_path = os.path.join(self.data_dir, 'images_hw', "{}/frame_{:07d}.jpg".format(clip_name, image_name + 1))
+        image_path = os.path.join(self.data_dir, 'images', "{}/frame_{:07d}.png".format(clip_name, image_name + 1))
         return image_path
 
 

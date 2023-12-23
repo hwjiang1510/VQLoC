@@ -7,6 +7,9 @@ print_freq: 100
 vis_freq: 1000
 eval_vis_freq: 100
 seed: 42
+data_dir: '../Meta/data'
+clip_dir: '../Meta/DLCV_vq2d_data/clips'
+meta_dir: '../Meta/DLCV_vq2d_data'
 
 # dataset config
 dataset:

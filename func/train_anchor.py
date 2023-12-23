@@ -94,13 +94,13 @@ def train_epoch(config, loader, model, optimizer, schedular, scaler, epoch, outp
 
         batch_end = time.time()
 
-        if rank == 0:
-            wandb_log = {'Train/loss': total_loss.item(),
-                        'Train/lr': optimizer.param_groups[0]['lr']}
-            for k, v in losses.items():
-                if 'loss' in k:
-                    wandb_log['Train/{}'.format(k)] = v.item()
-            wandb_run.log(wandb_log)
+        # if rank == 0:
+        #     wandb_log = {'Train/loss': total_loss.item(),
+        #                 'Train/lr': optimizer.param_groups[0]['lr']}
+        #     for k, v in losses.items():
+        #         if 'loss' in k:
+        #             wandb_log['Train/{}'.format(k)] = v.item()
+        #     wandb_run.log(wandb_log)
         
         dist.barrier()
         if batch_idx < 3:
@@ -152,12 +152,14 @@ def validate(config, loader, model, epoch, output_dir, device, rank, wandb_run=N
                                         output_dir=output_dir,
                                         subfolder='val')
             dist.barrier()
+    
+    # print("metrics: ", metrics)
             
-    if rank == 0:
-        wandb_log = {}
-        for k in metrics.keys():
-            wandb_log['Valid/{}'.format(k)] = torch.tensor(metrics[k]).mean().item()
-        wandb_run.log(wandb_log)
+    # if rank == 0:
+    #     wandb_log = {}
+    #     for k in metrics.keys():
+    #         wandb_log['Valid/{}'.format(k)] = torch.tensor(metrics[k]).mean().item()
+    #     wandb_run.log(wandb_log)
     
     return torch.tensor(metrics['iou']).mean().item(), torch.tensor(metrics['prob_accuracy']).mean().item()
 

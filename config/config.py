@@ -17,6 +17,9 @@ config.eval_vis_freq = 20
 config.seed = 42
 config.inference_cache_path = ''
 config.debug = False
+config.data_dir = '../Meta/data'
+config.clip_dir = '../Meta/DLCV_vq2d_data/clips'
+config.meta_dir = '../Meta/DLCV_vq2d_data'
 
 # dataset config
 config.dataset = edict()

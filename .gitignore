@@ -3,3 +3,7 @@
 /log
 /data
 /visualization
+*.tar
+*pycache*
+/dlcv
+/cpt_best_prob.pth
