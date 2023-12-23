@@ -39,7 +39,8 @@ class Task:
             (annot["metadata"]["annotation_uid"], annot["metadata"]["query_set"])
             for annot in self.annots
         ]
-        self.clip_dir = '/vision/srama/Research/Ego4D/episodic-memory/VQ2D/data/clips_fullres'
+        # self.clip_dir = '/vision/srama/Research/Ego4D/episodic-memory/VQ2D/data/clips_fullres'
+        self.clip_dir = '../dlcv/DLCV_vq2d_data/clips'
 
     def run(self, config, device):
         clip_uid = self.annots[0]["clip_uid"]
@@ -92,6 +93,7 @@ class Task:
             for peak in peaks[::-1]:
                 recent_peak = peak
                 break
+            # print(ret_scores_sm[recent_peak])
 
             if recent_peak is not None:
                 threshold = ret_scores_sm[recent_peak] * PEAK_WINDOW_THRESHOLD
@@ -111,6 +113,7 @@ class Task:
             
             latest_idx = sorted(list(set(latest_idx)))
             latest_bbox = ret_bboxes[latest_idx]    # [t,4]
+            score = ret_scores_sm[recent_peak]
             
             latest_bbox_format = []
             for (frame_bbox, fram_idx) in zip(latest_bbox, latest_idx):
@@ -118,7 +121,7 @@ class Task:
                 bbox_format = BBox(fram_idx, x1, y1, x2, y2)
                 latest_bbox_format.append(bbox_format)
             
-            pred_rts = [ResponseTrack(latest_bbox_format, score=1.0)]
+            pred_rts = [ResponseTrack(latest_bbox_format, score=score)]
             all_pred_rts[key] = pred_rts
         
         return all_pred_rts

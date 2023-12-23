@@ -2,7 +2,7 @@ exp_name: 'validate'
 exp_group: 'vq2d'
 output_dir: './output/'
 log_dir: './log'
-workers: 8
+workers: 1
 print_freq: 100
 vis_freq: 1000
 eval_vis_freq: 100
@@ -10,7 +10,8 @@ seed: 42
 
 # dataset config
 dataset:
-  name: 'ego4d_vq2d'
+  # name: 'ego4d_vq2d'
+  name: '../dlcv/data'
   query_size: 448
   clip_size_fine: 448
   clip_size_coarse: 448
@@ -36,7 +37,8 @@ model:
   pe_transformer: 'zero'
   window_transformer: 5
   positive_threshold: 0.3
-  cpt_path: './output/PATH_TO_THE_CHECKPOINT/cpt_best_prob.pth.tar'
+  # cpt_path: './output/PATH_TO_THE_CHECKPOINT/cpt_best_prob.pth.tar'
+  cpt_path: '3j3q9qsc1kovpwfxtnsful7pvdy234q6.tar'
 
 # loss config
 loss:

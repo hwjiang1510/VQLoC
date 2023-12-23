@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import math
 from torchvision import transforms
 from einops import rearrange
-from model.corr_clip_anchor import default_aspect_ratios
+# from model.corr_clip_anchor import default_aspect_ratios
+from model.corr_clip_spatial_transformer2_anchor_2heads_hnm import aspect_ratios
 from utils.anchor_utils import assign_labels
 from dataset import dataset_utils
 
@@ -275,7 +276,8 @@ def get_bbox_ratio(hw, device):
         ratio: closest bbox aspect ratio in default_aspect_ratios, in shape [B]
     '''
     b = hw.shape[0]
-    default_ratios = default_aspect_ratios.to(device)
+    # default_ratios = default_aspect_ratios.to(device)
+    default_ratios = aspect_ratios.to(device)
 
     h, w = hw.split([1,1], dim=-1)
     ratio = h / w

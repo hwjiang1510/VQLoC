@@ -20,7 +20,8 @@ from config.config import config, update_config
 from utils import exp_utils
 from evaluation import eval_utils
 from evaluation.task_inference_results import Task
-from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
+# from model.corr_clip_spatial_transformer2_anchor_2heads import ClipMatcher
+from model.corr_clip_spatial_transformer2_anchor_2heads_hnm import ClipMatcher
 
 
 class WorkerWithDevice(mp.Process):
@@ -86,31 +87,31 @@ def get_results(annotations, config):
 
 
 def format_predictions(annotations, predicted_rts):
+    # print(predicted_rts)
     # Format predictions
-    predictions = {
-        "version": annotations["version"],
-        "challenge": "ego4d_vq2d_challenge",
-        "results": {"videos": []},
-    }
-    for v in annotations["videos"]:
-        video_predictions = {"video_uid": v["video_uid"], "clips": []}
-        for c in v["clips"]:
-            clip_predictions = {"clip_uid": c["clip_uid"], "predictions": []}
-            for a in c["annotations"]:
-                auid = a["annotation_uid"]
-                apred = {
-                    "query_sets": {},
-                    "annotation_uid": auid,
-                }
-                for qid in a["query_sets"].keys():
-                    if (auid, qid) in predicted_rts:
-                        rt_pred = predicted_rts[(auid, qid)][0].to_json()
-                        apred["query_sets"][qid] = rt_pred
-                    else:
-                        apred["query_sets"][qid] = {"bboxes": [], "score": 0.0}
-                clip_predictions["predictions"].append(apred)
-            video_predictions["clips"].append(clip_predictions)
-        predictions["results"]["videos"].append(video_predictions)
+    predictions = {}
+
+    for clip_uid in annotations.keys():
+        # print("clip_uid: ", clip_uid)
+        if clip_uid not in predictions:
+            predictions[clip_uid] = {"predictions":[]}
+        for query_set in annotations[clip_uid]['annotations']:
+            auid = query_set["annotation_uid"]
+            apred = {
+                "query_sets": {},
+                # "annotation_uid": auid,
+            }
+            for qid in query_set["query_sets"].keys():
+                if (auid, qid) in predicted_rts:
+                    # print(predicted_rts[(auid, qid)])
+                    rt_pred = predicted_rts[(auid, qid)][0].to_json()
+                    apred["query_sets"][qid] = rt_pred
+                else:
+                    apred["query_sets"][qid] = {"bboxes": [], "score": 0.0}
+            predictions[clip_uid]["predictions"].append(apred)
+        # video_predictions["clips"].append(clip_predictions)
+    # predictions["results"]["videos"].append(video_predictions)
+    # print(predictions)
     return predictions
 
 
@@ -145,7 +146,7 @@ if __name__ == '__main__':
     random.seed(config.seed)
 
     mode = 'test_unannotated' if args.eval else 'val'
-    annotation_path = os.path.join('/vision/hwjiang/episodic-memory/VQ2D/data', 'vq_{}.json'.format(mode))
+    annotation_path = os.path.join('../dlcv/DLCV_vq2d_data/', 'vq_{}.json'.format(mode))
     with open(annotation_path) as fp:
         annotations = json.load(fp)
     clipwise_annotations_list = eval_utils.convert_annotations_to_clipwise_list(annotations)
@@ -161,5 +162,5 @@ if __name__ == '__main__':
     predictions_rt = get_results(clipwise_annotations_list, config)
     predictions = format_predictions(annotations, predictions_rt)
     if not args.debug:
-        with open(config.inference_cache_path + '_results.json.gz', 'w') as fp:
-            json.dump(predictions, fp)
+        with open(config.inference_cache_path + '_results.json', 'w') as fp:
+            json.dump(predictions, fp, indent=4)
