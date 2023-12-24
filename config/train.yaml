@@ -18,8 +18,8 @@ dataset:
   query_size: 448
   clip_size_fine: 448
   clip_size_coarse: 448
-  clip_num_frames: 30
-  clip_num_frames_val: 30
+  clip_num_frames: 15
+  clip_num_frames_val: 15
   clip_sampling: 'rand'
   clip_reader: 'decord_random'
   clip_reader_val: 'decord_balance'
@@ -41,6 +41,9 @@ model:
   window_transformer: 5
   positive_threshold: 0.2
   positive_topk: 5
+  cpt_path: ''
+  fpn: True
+
 
 # loss config
 loss:
@@ -53,8 +56,8 @@ loss:
 
 # training config
 train:
-  resume: True
-  batch_size: 3
+  resume: False
+  batch_size: 1
   total_iteration: 60000
   lr: 0.0003
   weight_decay: 0.005

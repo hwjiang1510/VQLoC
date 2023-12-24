@@ -12,6 +12,8 @@ import torchvision
 from dataset import dataset_utils
 from model.mae import vit_base_patch16
 
+from model.SimpleFeaturePyramid import SimpleFeaturePyramid
+
 base_sizes=torch.tensor([[16, 16], [32, 32], [64, 64], [128, 128]], dtype=torch.float32)    # 4 types of size
 aspect_ratios=torch.tensor([0.5, 1, 2], dtype=torch.float32)                                # 3 types of aspect ratio
 n_base_sizes = base_sizes.shape[0]
@@ -148,6 +150,9 @@ class ClipMatcher(nn.Module):
         # output head
         self.head = Head(in_dim=256, in_res=self.resolution_transformer, out_res=self.resolution_anchor_feat)
 
+        if config.model.fpn:
+            self.simple_feature_pyramid = SimpleFeaturePyramid(self.backbone, 14, "output_of_vitb14", self.backbone_dim, [0.5, 1, 2, 4])
+
     def init_weights_linear(self, m):
         if type(m) == nn.Linear:
             #nn.init.xavier_uniform_(m.weight)
@@ -167,10 +172,12 @@ class ClipMatcher(nn.Module):
             return out
         elif self.backbone_name == 'dinov2':
             b, _, h_origin, w_origin = x.shape
+            # b : 3 or 90, h_origin : 448, w_origin : 448
             out = self.backbone.get_intermediate_layers(x, n=1)[0]
             h, w = int(h_origin / self.backbone.patch_embed.patch_size[0]), int(w_origin / self.backbone.patch_embed.patch_size[1])
             dim = out.shape[-1]
             out = out.reshape(b, h, w, dim).permute(0,3,1,2)
+            # out.shape() : torch.Size([3 or 90, 768, 32, 32])
             if return_h_w:
                 return out, h, w
             return out
@@ -215,6 +222,7 @@ class ClipMatcher(nn.Module):
         clip: in shape [b,t,c,h,w]
         query: in shape [b,c,h2,w2]
         '''
+
         b, t = clip.shape[:2]
         clip = rearrange(clip, 'b t c h w -> (b t) c h w')
 
@@ -227,6 +235,11 @@ class ClipMatcher(nn.Module):
             query_feat = self.extract_feature(query)        # [b c h w]
             clip_feat = self.extract_feature(clip)          # (b t) c h w
         h, w = clip_feat.shape[-2:]
+
+        if self.config.model.fpn:
+            # print("[[[[[[[[[[[[[[ orginal clip_feat ]]]]]]]]]]]]]]", clip_feat.shape)
+            clip_feat = self.simple_feature_pyramid(clip_feat)
+            # print("[[[[[[[[[[[[[[ new clip_feat ]]]]]]]]]]]]]]", clip_feat.shape)
 
         if torch.is_tensor(query_frame_bbox) and self.config.train.use_query_roi:
             idx_tensor = torch.arange(b, device=clip.device).float().view(-1, 1)
