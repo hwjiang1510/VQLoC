@@ -162,5 +162,5 @@ if __name__ == '__main__':
     predictions_rt = get_results(clipwise_annotations_list, config)
     predictions = format_predictions(annotations, predictions_rt)
     if not args.debug:
-        with open(config.inference_cache_path + '_results.json', 'w') as fp:
+        with open(config.inference_cache_path + '_results_vit_fpn.json', 'w') as fp:
             json.dump(predictions, fp, indent=4)

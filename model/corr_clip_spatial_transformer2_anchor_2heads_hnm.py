@@ -248,6 +248,8 @@ class ClipMatcher(nn.Module):
             query_feat = torchvision.ops.roi_align(query_feat, roi_bbox, (h,w))
 
         # reduce channel size
+        # print(query_feat.__len__)
+        # print(clip_feat.size())
         all_feat = torch.cat([query_feat, clip_feat], dim=0)
         all_feat = self.reduce(all_feat)
         query_feat, clip_feat = all_feat.split([b, b*t], dim=0)

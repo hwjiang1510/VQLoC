@@ -1,5 +1,6 @@
 exp_name: 'eval'
 exp_group: 'vq2d'
+output_dir: './output_vit_fpn/'
 log_dir: './log'
 workers: 0
 print_freq: 100
@@ -16,8 +17,8 @@ dataset:
   query_size: 448
   clip_size_fine: 448
   clip_size_coarse: 448
-  clip_num_frames: 30
-  clip_num_frames_val: 30
+  clip_num_frames: 15
+  clip_num_frames_val: 15
   clip_sampling: 'rand'
   clip_reader: 'decord_balance'   # balance positive and negative samples
   frame_interval: 1
@@ -39,7 +40,9 @@ model:
   window_transformer: 5
   positive_threshold: 0.3
   # best checkpoint
-  cpt_path: '3j3q9qsc1kovpwfxtnsful7pvdy234q6.tar'
+  # cpt_path: '3j3q9qsc1kovpwfxtnsful7pvdy234q6.tar'
+  cpt_path: 'output/ego4d_egotracks/train/train/cpt_best_iou_vit_fpn.pth.tar'
+  fpn: True
 
 # loss config
 loss:
