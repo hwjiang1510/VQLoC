@@ -23,7 +23,7 @@ pip install -r requirements.txt
 We provide the model weights trained on [here](https://utexas.box.com/shared/static/3j3q9qsc1kovpwfxtnsful7pvdy234q6.tar).
 
 
-## Train LEAP
+## Train VQLoC
 
 ### Download Dataset
 - Please follow [vq2d baseline](https://github.com/EGO4D/episodic-memory/tree/main/VQ2D#preparing-data-for-training-and-inference) step 1/2/4/5 to process the dataset into video clips.
@@ -33,7 +33,7 @@ We provide the model weights trained on [here](https://utexas.box.com/shared/sta
 - The default training configurations require about 200GB at most, e.g. 8 A40 GPUs with 40GB VRAM, each.
 
 
-## Evaluate LEAP
+## Evaluate VQLoC
 - 1. Use `./inference_predict.sh` to inference on the target video clips. Change the path of your model checkpoint.
 - 2. Use `python inference_results.py --cfg ./config/val.yaml` to format the results. Use `--eval` and `--cfg ./config/eval.yaml` for evaluation (submit to leaderboard).
 - 3. Use `python evaluate.py` to get the numbers. Please change `--pred-file` and `--gt-file` accordingly.
